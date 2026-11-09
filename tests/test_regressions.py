@@ -5,6 +5,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 import machyon
 from machyon import Downloader, read_rows
 
@@ -124,6 +126,26 @@ def test_cli_options_before_source_and_non_utf8_console(cdn, tmp_path):
     r = _cli("--no-progress", "-o", "out", str(p), cwd=tmp_path, env_extra={"PYTHONIOENCODING": "cp1252"})
     assert r.returncode == 0, r.stderr
     assert len(os.listdir(tmp_path / "out")) == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals; Windows Ctrl+C can't be sent to one child process")
+def test_cli_ctrl_c_explains_instead_of_a_traceback(cdn, tmp_path):
+    import signal
+    import time
+
+    c = cdn("--rtt", "0.3")
+    p = tmp_path / "u.txt"
+    p.write_text("".join(c.url(i) + "\n" for i in range(300)))
+    env = {**os.environ, "PYTHONPATH": SRC, "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)}
+    proc = subprocess.Popen([sys.executable, "-m", "machyon", "--no-progress", "--no-adaptive", "--concurrency", "8",
+                             "-o", "out", str(p)], cwd=tmp_path, env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    time.sleep(2.5)
+    proc.send_signal(signal.SIGINT)
+    _, err = proc.communicate(timeout=60)
+    assert proc.returncode == 130, err
+    assert "Traceback" not in err and "Run the same command again" in err
+    assert "interrupted" in {json.loads(x)["reason"] for x in open(tmp_path / "out" / "failed_downloads.jsonl")}
 
 
 def test_json_object_picks_the_url_list(tmp_path):

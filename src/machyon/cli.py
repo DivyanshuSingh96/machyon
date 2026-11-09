@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import itertools
+import os
 import sys
 
 from . import __version__
@@ -173,7 +174,13 @@ def main(argv: list[str] | None = None) -> int:
         return _names(a)
     if a.command in ("download", "retry"):
         setup_logging(a.log)
-        return run(_download(a) if a.command == "download" else _retry(a))
+        try:
+            return run(_download(a) if a.command == "download" else _retry(a))
+        except KeyboardInterrupt:  # every row is already accounted for; say so instead of a traceback
+            ledger = os.path.join(a.output, "failed_downloads.jsonl")
+            print(f"\nStopped. Every file on disk is complete; the rest are listed in {ledger} as interrupted.\n"
+                  "Run the same command again to continue.", file=sys.stderr)
+            return 130
     parser.print_help()
     return 0
 
