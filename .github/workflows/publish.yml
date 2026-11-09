@@ -1,0 +1,68 @@
+name: Publish to PyPI
+
+# Uses PyPI Trusted Publishing: no API token is stored anywhere.
+#   Real release: publish a GitHub Release whose tag is v<version> (for example v1.0.0) -> PyPI.
+#   Dry run:      Actions -> "Publish to PyPI" -> Run workflow -> TestPyPI.
+# One-time setup: on pypi.org and test.pypi.org, add a "pending publisher" with owner DivyanshuSingh96,
+# repository machyon, workflow publish.yml, and environment "pypi" (PyPI) or "testpypi" (TestPyPI).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install build twine
+      - run: python -m build
+      - name: Check the package renders on PyPI
+        run: python -m twine check --strict dist/*
+      - name: The release tag must match the package version
+        if: github.event_name == 'release'
+        run: |
+          version=$(python -c "import sys, glob; w = glob.glob('dist/*.whl')[0]; print(w.split('-')[1])")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package version $version (expected v$version)"; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

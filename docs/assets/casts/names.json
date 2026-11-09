@@ -1,0 +1,11 @@
+{
+ "title": "Preview filenames",
+ "version": "1.0.0",
+ "steps": [
+  {
+   "cmd": "machyon names urls.csv --names {label}/{index}_{hash}{ext} --limit 5",
+   "output": "url,filename\nhttp://cdn.example.test/img/0.jpg,cats/0_67ba57b74cee05cc.jpg\nhttp://cdn.example.test/img/1.jpg,dogs/1_ee2f12ea7e6250d5.jpg\nhttp://cdn.example.test/img/2.jpg,birds/2_e4b5f9f76c392127.jpg\nhttp://cdn.example.test/img/3.jpg,cats/3_ba04894f61b5d2e3.jpg\nhttp://cdn.example.test/img/4.jpg,dogs/4_b6ab44950700833b.jpg",
+   "exit": 0
+  }
+ ]
+}

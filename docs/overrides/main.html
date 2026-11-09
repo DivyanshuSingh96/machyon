@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {#- Brand favicon set (BRAND.md): the .ico holds the 16/32 pixel masters; the SVG switches to a white body in
+      dark browser themes; the touch icon is the app icon. -#}
+  <link rel="icon" type="image/svg+xml" href="{{ 'assets/brand/favicon.svg' | url }}">
+  <link rel="apple-touch-icon" href="{{ 'assets/brand/apple-touch-icon.png' | url }}">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4F1EA">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#2A3142">
+  <link rel="preload" href="{{ 'assets/fonts/figtree-latin-wght-normal.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ 'assets/fonts/manrope-800.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  {%- set mx_meta = page.meta or {} %}
+  {%- set mx_title = config.site_name if page.is_homepage else (mx_meta.title | d(page.title, true)) ~ " · " ~ config.site_name %}
+  {%- set mx_desc = mx_meta.description | d(config.site_description, true) %}
+  {%- set mx_card = config.site_url ~ "assets/brand/social-card.png" %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ mx_title }}">
+  <meta property="og:description" content="{{ mx_desc }}">
+  {%- if page.canonical_url is defined and page.canonical_url %}
+  <meta property="og:url" content="{{ page.canonical_url }}">
+  {%- endif %}
+  <meta property="og:image" content="{{ mx_card }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Machyon: every image, Mach speed, zero lost. Fast async image downloads for Python.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="{{ mx_card }}">
+{% endblock %}

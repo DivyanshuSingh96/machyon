@@ -1,0 +1,20 @@
+{% extends "main.html" %}
+
+{% block content %}
+  <div class="mx-404">
+    <div class="opa-stage" data-opa-404 data-symbol="{{ 'assets/brand/opa-symbol-light.svg' | url }}">
+      <img class="opa-fallback mx-only-light" src="{{ 'assets/brand/opa-mascot-light.svg' | url }}" alt="Opa, the Machyon mascot" width="260" height="260">
+      <img class="opa-fallback mx-only-dark" src="{{ 'assets/brand/opa-mascot-dark.svg' | url }}" alt="Opa, the Machyon mascot" width="260" height="260">
+    </div>
+    <h1>This page got lost.</h1>
+    <p class="lead">Your images won't: Opa never leaves one behind. Some strays are drifting around this page;
+      click them and Opa will fetch every one.</p>
+    <p class="opa-count" aria-live="polite"></p>
+    <p>
+      <button type="button" class="md-button opa-again" hidden>Throw them again</button>
+      <a class="md-button md-button--primary" href="{{ config.site_url or ('.' | url) }}">Go to the homepage</a>
+      <a class="md-button" href="{{ 'reliability/zero-lost/' | url }}">Read the zero-lost contract</a>
+    </p>
+    <p class="opa-hint">Looking for something specific? Press <kbd>/</kbd> to search.</p>
+  </div>
+{% endblock %}

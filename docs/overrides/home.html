@@ -1,0 +1,11 @@
+{#- Homepage: no sidebars, wider column. The content itself lives in docs/index.md so it stays editable. -#}
+{% extends "main.html" %}
+
+{% block container %}
+  <div class="md-content mx-home" data-md-component="content">
+    <article class="md-content__inner md-typeset">
+      <a id="__skip" tabindex="-1"></a>
+      {{ page.content }}
+    </article>
+  </div>
+{% endblock %}

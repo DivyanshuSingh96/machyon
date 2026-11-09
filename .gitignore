@@ -1,0 +1,15 @@
+site/
+.cache/
+__pycache__/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.DS_Store
+*.zip
+machyon-docs-site*/
+images/
+metrics/
