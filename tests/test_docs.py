@@ -66,17 +66,17 @@ def _fixtures(folder: Path, url) -> None:
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
-    except ImportError:
+    except Exception:                                  # missing, or installed but broken on this platform
         return
     pq.write_table(pa.table({"image_link": urls, "label": [LABELS[i % 3] for i in range(N)]}),
                    folder / "products.parquet")
 
 
 def _needs(code: str) -> list[str]:
-    m = re.match(r"# needs: pip install (.+?)(?:\s{2,}|\(|$)", code)
+    m = re.match(r"# needs: pip install (.+?)(?:\s{2,}|\(|$)", code, re.M)   # re.M: "$" = end of that line
     if not m:
         return []
-    return ["pyarrow" if "parquet" in pkg else pkg.strip("\"'") for pkg in m.group(1).split()]
+    return ["pyarrow.parquet" if "parquet" in pkg else pkg.strip("\"'") for pkg in m.group(1).split()]
 
 
 @pytest.mark.parametrize("snippet", sorted(p.name for p in SNIPPETS.glob("*.py")))
@@ -86,6 +86,8 @@ def test_snippet_runs(snippet, cdn, tmp_path):
         pytest.importorskip(module)
     c = cdn("--p-dead", "0.01", "--p-soft404", "0.005", "--p-503", "0.02", "--p-octet", "0.05")
     _fixtures(tmp_path, c.url)
+    if "parquet" in code and not (tmp_path / "products.parquet").exists():   # pyarrow installed but broken
+        pytest.skip("pyarrow can't write Parquet here; the Docs workflow runs this example with the [parquet] extra")
     (tmp_path / snippet).write_text(code, encoding="utf-8")
     env = dict(os.environ, HOME=str(tmp_path / "home"), USERPROFILE=str(tmp_path / "home"),
                PYTHONPATH=str(ROOT / "src"))
