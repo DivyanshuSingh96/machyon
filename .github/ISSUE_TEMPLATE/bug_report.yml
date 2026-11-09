@@ -1,0 +1,45 @@
+name: Bug report
+description: Something doesn't work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! A failing URL is often explained by `machyon doctor <url>`, so try that first.
+        Please remove anything private (tokens, cookies, internal URLs) before posting.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead.
+      placeholder: |
+        I ran `machyon train.csv -o images/` and expected …, but …
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest command or code that shows the problem. A few sample URLs help a lot.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output, errors or ledger lines
+      description: The summary Machyon printed, any traceback, and a few lines from `failed_downloads.jsonl`.
+      render: text
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`machyon doctor <url>` output (for download failures)"
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `machyon --version`, plus your Python version and operating system.
+      placeholder: machyon 1.0.0, Python 3.12, Windows 11
+    validations:
+      required: true

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/DivyanshuSingh96/machyon/discussions
+    about: Ask how to do something, or share what you built with Machyon.
+  - name: Troubleshooting guide
+    url: https://divyanshusingh96.github.io/machyon/troubleshooting/
+    about: 403s, HTML pages instead of images, certificate errors, timeouts and more.
+  - name: Security problem
+    url: https://github.com/DivyanshuSingh96/machyon/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.

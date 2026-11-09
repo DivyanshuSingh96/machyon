@@ -29,6 +29,7 @@ class Page(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.ids: set[str] = set()
         self.links: list[str] = []
+        self.media: list[str] = []      # images, video/audio sources and posters on this site
         self.remote: list[str] = []
         self._skip = 0           # inside <code>/<pre>/<script>: template syntax there is content
         self.text_hits: list[str] = []
@@ -45,6 +46,11 @@ class Page(HTMLParser):
                else a.get("href") if tag == "link" and a.get("rel") not in ("canonical", "alternate") else None)
         if tag == "video" and a.get("poster"):
             src = a["poster"]
+        for attr in ("src", "poster"):
+            v = a.get(attr)
+            if v and tag in ("img", "source", "video", "audio", "script") and not urlsplit(v).scheme \
+                    and not v.startswith(("data:", "//")):
+                self.media.append(v)
         if src and urlsplit(src).scheme in ("http", "https") and not src.startswith(ALLOWED_REMOTE):
             self.remote.append(f"<{tag}> {src}")
         if tag in ("code", "pre", "script", "style"):
@@ -89,6 +95,10 @@ def check_site(site: Path) -> list[str]:
                 continue
             if frag and target in pages and unquote(frag) not in pages[target].ids:
                 problems.append(f"{rel}: missing anchor {href}")
+        for src in p.media:                     # every image, video, poster and script must exist
+            path = urldefrag(src)[0].split("?")[0]
+            if not (f.parent / unquote(path)).resolve().is_file():
+                problems.append(f"{rel}: missing file {src}")
     return problems
 
 

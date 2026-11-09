@@ -6,8 +6,8 @@ description: Opa is Machyon's mascot, an Opabinia - a five-eyed Cambrian animal 
 
 <div class="mx-teaser" markdown>
 
-<img class="mx-only-light" src="../../assets/brand/opa-mascot-light.svg" alt="Opa, curled, with five amber eyes and an amber claw" width="530" height="530">
-<img class="mx-only-dark" src="../../assets/brand/opa-mascot-dark.svg" alt="Opa, curled, with five amber eyes and an amber claw" width="530" height="530">
+<img class="mx-only-light" src="../assets/brand/opa-mascot-light.svg" alt="Opa, curled, with five amber eyes and an amber claw" width="530" height="530">
+<img class="mx-only-dark" src="../assets/brand/opa-mascot-dark.svg" alt="Opa, curled, with five amber eyes and an amber claw" width="530" height="530">
 
 <div markdown>
 
@@ -33,7 +33,7 @@ A 25-second film about where Opa came from. Original animation and score, made f
 
 <video class="mx-film" controls preload="none" playsinline poster="../../assets/film/the-arrival-of-opa-poster.jpg"
   aria-label="The Arrival of Opa, a 25-second animated film with music and no dialogue">
-  <source src="../../assets/film/the-arrival-of-opa.mp4" type="video/mp4">
+  <source src="../assets/film/the-arrival-of-opa.mp4" type="video/mp4">
 </video>
 
 ## The name Machyon
