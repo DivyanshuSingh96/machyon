@@ -361,7 +361,7 @@ body {
 
 /* 404: Opa's fetch game (assets/js/opa-404.js) */
 .mx-404 { text-align: center; padding: 0.5rem 0 2rem; }
-.opa-stage { position: relative; height: 21rem; margin: 0 auto 0.6rem; max-width: 40rem; }
+.opa-stage { position: relative; height: 23rem; margin: 0 auto 0.6rem; max-width: 40rem; }
 .opa-art, .opa-fallback { position: absolute; left: 50%; top: 52%; width: min(16rem, 62%); height: auto; transform: translate(-50%, -50%); }
 .opa-art .mx-ink { fill: var(--mx-logo-body); }
 .opa-art .mx-amber { fill: var(--mx-amber); }
@@ -370,25 +370,38 @@ body {
 .opa-happy { animation: opa-happy .38s cubic-bezier(.2, .9, .3, 1.5); }
 @keyframes opa-blink { 50% { transform: scaleY(.12); } }
 @keyframes opa-happy { 40% { transform: scale(1.14); } }
-.opa-stray { position: absolute; display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.6rem 0.35rem 0.4rem;
-  font: 600 0.66rem var(--md-code-font-family); color: var(--mx-ink); background: var(--mx-surface); border: 0;
-  border-radius: 10px; box-shadow: var(--mx-shadow-lift); cursor: grab;
+.opa-stray { position: absolute; left: var(--x); top: var(--y); display: flex; flex-direction: column; align-items: stretch;
+  gap: 0.25rem; width: 6rem; padding: 0.3rem 0.3rem 0.25rem; background: var(--mx-surface); border: 0; border-radius: 6px;
+  box-shadow: var(--mx-shadow-lift); cursor: grab; touch-action: none; user-select: none; rotate: var(--tilt, 0deg);
   animation: opa-drift var(--d, 6s) ease-in-out var(--delay, 0s) infinite alternate;
-  transition: transform .6s cubic-bezier(.5, 0, .3, 1), opacity .6s ease-in; }
-.opa-stray svg { flex: none; width: 1.3rem; height: 1.3rem; fill: none; stroke: var(--mx-accent-ink); stroke-width: 1.6;
-  stroke-linejoin: round; stroke-linecap: round; background: var(--mx-chip); border-radius: 6px; padding: 2px; }
-[data-md-color-scheme="slate"] .opa-stray svg { stroke: var(--mx-chip-ink); }
+  transition: transform .6s cubic-bezier(.5, 0, .3, 1), opacity .6s ease-in, box-shadow .15s; }
+.opa-photo { display: block; width: 100%; height: auto; border-radius: 3px; }
+.opa-name { font: 600 0.58rem var(--md-code-font-family); color: var(--mx-muted); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; text-align: center; }
 .opa-stray:hover { box-shadow: var(--mx-shadow-lift), 0 0 0 2px var(--mx-accent); }
-.opa-stray.opa-flying { animation: none; opacity: 0; pointer-events: none; }
-@keyframes opa-drift { from { translate: 0 0; rotate: -3deg; } to { translate: 10px -14px; rotate: 3deg; } }
-.md-typeset .opa-again[hidden] { display: none; }
-.opa-stray span { white-space: nowrap; }
-.opa-count { font-weight: 700; color: var(--mx-ink); min-height: 1.6em; margin: 0.2rem 0 0.8rem; }
+.opa-stray:focus-visible { outline: 2px solid var(--mx-focus); outline-offset: 3px; }
+.opa-stray.opa-dragging { animation: none; cursor: grabbing; z-index: 2; transition: none;
+  box-shadow: 0 18px 40px rgba(var(--mx-shadow-rgb), .28), 0 0 0 2px var(--mx-accent); }
+.opa-stray.opa-flying { animation: none; pointer-events: none; z-index: 2; }
+.opa-stray.opa-taken { opacity: 0; }
+.opa-stray.opa-rejected { animation: none; cursor: default; }
+.opa-stray.opa-rejected .opa-photo { opacity: .55; }
+.opa-stray.opa-rejected:hover { box-shadow: var(--mx-shadow-lift); }
+.opa-stamp { position: absolute; left: 50%; top: 38%; translate: -50% -50%; rotate: -14deg; padding: 0.05rem 0.3rem;
+  font: 800 0.62rem var(--md-code-font-family); color: #D64545; border: 2px solid #D64545; border-radius: 4px;
+  background: color-mix(in srgb, var(--mx-surface) 85%, transparent); animation: opa-stamp .3s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes opa-stamp { from { scale: 1.8; opacity: 0; } }
+@keyframes opa-drift { from { translate: 0 0; } to { translate: 10px -14px; } }
+.md-typeset .opa-again[hidden], .md-typeset .opa-ledger[hidden] { display: none; }
+.opa-count { font-weight: 700; color: var(--mx-ink); min-height: 1.6em; margin: 0.2rem 0 0.6rem; }
+.md-typeset .opa-ledger { display: inline-block; max-width: 100%; margin: 0 auto 0.9rem; padding: 0.5rem 0.75rem; text-align: left;
+  white-space: pre-wrap; word-break: break-word; font-size: 0.62rem; line-height: 1.55; color: var(--mx-muted);
+  background: var(--mx-code-bg); border: 1px solid var(--mx-line); border-radius: var(--mx-radius-sm); }
 .opa-hint { color: var(--mx-muted); font-size: 0.74rem; }
 @media (max-width: 40rem) {
-  .opa-stage { height: 19rem; }
-  .opa-stray span { display: none; }               /* icon-only cards on phones */
-  .opa-stray { padding: 0.4rem; }
+  .opa-stage { height: 24rem; }
+  .opa-art, .opa-fallback { width: min(11rem, 50%); top: 48%; }
+  .opa-stray { left: var(--mx); top: var(--my); width: 4.6rem; }
 }
 @media (prefers-reduced-motion: reduce) { .opa-stray { animation: none; transition: none; } }
 

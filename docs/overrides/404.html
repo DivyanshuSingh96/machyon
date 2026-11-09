@@ -7,9 +7,10 @@
       <img class="opa-fallback mx-only-dark" src="{{ 'assets/brand/opa-mascot-dark.svg' | url }}" alt="Opa, the Machyon mascot" width="260" height="260">
     </div>
     <h1>This page got lost.</h1>
-    <p class="lead">Your images won't: Opa never leaves one behind. Some strays are drifting around this page;
-      click them and Opa will fetch every one.</p>
+    <p class="lead">Your images won't. Some lost photos are drifting around this page: drag one to Opa, or click it.
+      Opa checks every file before keeping it.</p>
     <p class="opa-count" aria-live="polite"></p>
+    <pre class="opa-ledger" hidden></pre>
     <p>
       <button type="button" class="md-button opa-again" hidden>Throw them again</button>
       <a class="md-button md-button--primary" href="{{ config.site_url or ('.' | url) }}">Go to the homepage</a>
