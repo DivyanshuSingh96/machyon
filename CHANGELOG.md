@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 (2026-11-09)
 
 **Fixed**
 - Stopping a run (Ctrl+C or a cancelled task) while a file was being moved into place could record that row as `interrupted` even though its file landed a moment later, so the row was counted twice. The file now finishes landing first and is counted as downloaded. More likely on Windows, where antivirus can slow renames.
+
+**Changed**
+- Clearer wording for what Machyon promises. The PyPI summary is now "Fast async image downloads for Python, with every file accounted for": every row ends downloaded, already on disk, or recorded with the reason. The old line, "without losing a single file", could read as a promise that every link works.
 
 ## 1.0.0 (2026-11-09): first release
 

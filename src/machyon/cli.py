@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             pass
 
     parser = argparse.ArgumentParser(prog="machyon",
-                                     description="Download any number of images, fast, without losing a single file.")
+                                     description="Fast async image downloads for Python, with every file accounted for.")
     parser.add_argument("--version", action="version", version=f"machyon {__version__}")
     sub = parser.add_subparsers(dest="command")
 

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "machyon"
-version = "1.0.0"
-description = "Download any number of images, fast, without losing a single file."
+version = "1.0.1"
+description = "Fast async image downloads for Python, with every file accounted for."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

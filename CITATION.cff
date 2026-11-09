@@ -1,11 +1,11 @@
 cff-version: 1.2.0
 message: "If you use Machyon in research, please cite it as below."
-title: "Machyon: fast, self-tuning, loss-free bulk image downloading"
+title: "Machyon: fast, self-tuning bulk image downloads that account for every file"
 type: software
 authors:
   - family-names: Singh
     given-names: Divyanshu
-version: 1.0.0
+version: 1.0.1
 date-released: 2026-11-09
 license: MIT
 repository-code: "https://github.com/DivyanshuSingh96/machyon"

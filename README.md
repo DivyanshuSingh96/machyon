@@ -108,7 +108,7 @@ Downloading a lot of images *looks* trivial, until you do it for real:
 - Times are wall-clock, including process start-up, on a 2-vCPU machine shared with the CDN.
 - **Your numbers will differ.** On a fast connection Machyon is usually limited by the network, not by itself. Reproduce with [`benchmarks/harness.py`](https://github.com/DivyanshuSingh96/machyon/blob/main/benchmarks/harness.py).
 
-**Where img2dataset is the better choice:** it's a superb tool built for a different job. It does resizing, WebDataset/Parquet shards, captions, and distributed runs on Spark or Ray for hundreds of millions of images on big clusters. Machyon is the embeddable, self-tuning, never-lose-a-file downloader for everything up to that scale, on the machine you already have.
+**Where img2dataset is the better choice:** it's a superb tool built for a different job. It does resizing, WebDataset/Parquet shards, captions, and distributed runs on Spark or Ray for hundreds of millions of images on big clusters. Below that scale, on the machine you already have, Machyon is the embeddable, self-tuning downloader that accounts for every file.
 
 ## Quickstart
 

@@ -23,7 +23,7 @@ When its fossils were first presented, the audience reportedly laughed, because 
 
 ## Why an Opabinia
 
-Machyon's job is to reach into a list of URLs and bring back exactly what you asked for, without losing any of it.
+Machyon's job is to reach into a list of URLs and bring back exactly what you asked for, and account for every one of them.
 Opa is that job as an animal: five eyes that [watch every row](../reliability/index.md) from the plan to the
 disk, and one long reach that grabs precisely the thing it was sent for.
 

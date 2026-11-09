@@ -23,8 +23,8 @@ repository"), Zenodo and most reference managers.
 ```bibtex
 @software{singh_machyon_2026,
   author  = {Singh, Divyanshu},
-  title   = {Machyon: fast, self-tuning, loss-free bulk image downloading},
-  version = {1.0.0},
+  title   = {Machyon: fast, self-tuning bulk image downloads that account for every file},
+  version = {1.0.1},
   year    = {2026},
   url     = {{ "{" }}{{ config.extra.repo }}{{ "}" }},
   license = {MIT}

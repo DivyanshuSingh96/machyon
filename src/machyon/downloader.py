@@ -90,7 +90,7 @@ class _WarmStart:
 
 
 class Downloader:
-    """Download any number of images, fast, without losing a single file.
+    """Fast async image downloads for Python, with every file accounted for.
 
     ::
 
