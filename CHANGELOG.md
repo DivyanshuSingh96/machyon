@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+**Fixed**
+- Pressing Ctrl+C during `machyon download` or `machyon retry` printed a Python traceback. It now says that every file on disk is complete, where the interrupted rows are listed, and to run the same command again to continue, and exits with status 130.
+
 ## 1.0.1 (2026-11-09)
 
 **Fixed**
