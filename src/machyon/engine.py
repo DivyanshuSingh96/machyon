@@ -138,6 +138,12 @@ class Engine:
                 return None
             return max(0.75, 2.0 * lat[int(0.9 * len(lat))])
 
+        def hedge_done(job: Job, clone: Job, task: asyncio.Task) -> None:
+            if clone.landed:
+                job.landed = True
+            settle(job, task)
+            fetcher.cleanup_part(clone)
+
         async def hedger() -> None:
             while True:
                 await asyncio.sleep(0.2)
@@ -155,7 +161,7 @@ class Engine:
                     clone = job.clone()
                     t = loop.create_task(fetcher.attempt(session, clone))
                     job.tasks = (job.tasks[0], t)
-                    t.add_done_callback(lambda tt, j=job, cl=clone: (settle(j, tt), fetcher.cleanup_part(cl)))
+                    t.add_done_callback(lambda tt, j=job, cl=clone: hedge_done(j, cl, tt))
                     state["hedge_budget"] -= 1
                     m.c["hedged"] += 1
 
@@ -251,8 +257,16 @@ class Engine:
             for t in workers + extra:
                 t.cancel()
             await asyncio.gather(*workers, *extra, return_exceptions=True)
+            # Hedged attempts are separate tasks, already cancelled: wait for them, so a file that
+            # was mid-rename has landed (or not) before its row is recorded.
+            attempts = [t for job in leftovers for t in job.tasks if not t.done()]
+            if attempts:
+                await asyncio.gather(*attempts, return_exceptions=True)
             for job in leftovers:  # Ctrl+C / fatal stop: record so a re-run resumes them
-                self._finish(job, False, "interrupted", 0, None)
+                if job.landed:
+                    self._finish(job, True, None, 0, None)
+                else:
+                    self._finish(job, False, "interrupted", 0, None)
         if fetcher.fatal is not None:
             fatal, fetcher.fatal = fetcher.fatal, None
             raise FatalDiskError(f"Stopped: cannot write files ({fatal})") from fatal

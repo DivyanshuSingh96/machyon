@@ -100,7 +100,7 @@ class Fetcher:
                     resp.release()
                     if cr.endswith(f"/{job.part_size}") and self.part_intact(job):
                         ext = job.ext or ".img"
-                        await self.disk.finalize(job.part, job.resolved(ext))
+                        await self.disk.finalize(job.part, job.resolved(ext), job.mark_landed)
                         job.part, job.part_size, job.validator = None, 0, None
                         return "ok", None, None, 0, ext
                     self.cleanup_part(job)
@@ -126,7 +126,7 @@ class Fetcher:
                         self.note(bad, job.url, f"Content-Type {ctype or '?'}, body starts {body[:60]!r}")
                         return "fail", bad, None, 0, None
                     ext = ext_for(fmt, ctype)
-                    await self.disk.write(job.resolved(ext), body)
+                    await self.disk.write(job.resolved(ext), body, job.mark_landed)
                     return "ok", None, None, len(body), ext
                 return await self._stream(resp, job, ctype, clen, dl)
         except TimeoutError as e:
@@ -233,6 +233,6 @@ class Fetcher:
         if job.part_size == 0:
             return "retry", "empty_body", None, 0, None
         ext = job.ext or ext_for(None, ctype)
-        await self.disk.finalize(job.part, job.resolved(ext))
+        await self.disk.finalize(job.part, job.resolved(ext), job.mark_landed)
         job.part, job.part_size, job.validator = None, 0, None
         return "ok", None, None, written, ext

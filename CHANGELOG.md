@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+**Fixed**
+- Stopping a run (Ctrl+C or a cancelled task) while a file was being moved into place could record that row as `interrupted` even though its file landed a moment later, so the row was counted twice. The file now finishes landing first and is counted as downloaded. More likely on Windows, where antivirus can slow renames.
+
 ## 1.0.0 (2026-11-09): first release
 
 Machyon is a new bulk image downloader, built from scratch around one promise: **fast, and never loses a file**.

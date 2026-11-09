@@ -216,6 +216,43 @@ def test_interrupt_leaves_no_partials_and_resumes(cdn, dl_kwargs):
     assert files_ok(c, rows, save) == []
 
 
+def test_cancel_while_a_file_is_being_committed_counts_it_once(cdn, dl_kwargs, monkeypatch):
+    """A disk thread can't be stopped mid-rename: a file that lands after Ctrl+C is downloaded, not interrupted."""
+    import threading
+
+    c = cdn()
+    rows = [(c.url(i), f"{i}.png") for i in range(40)]
+    committing = threading.Event()
+    real = disk_mod.write_atomic_sync
+
+    def slow_commit(paths, data, fsync):
+        committing.set()
+        time.sleep(0.4)              # e.g. Windows Defender holding the file
+        real(paths, data, fsync)
+
+    monkeypatch.setattr(disk_mod, "write_atomic_sync", slow_commit)
+
+    async def interrupted():
+        d = ImageDownloader(**{**dl_kwargs, "concurrent_limit": 8, "adaptive": False})
+        task = asyncio.ensure_future(d.download_all_images([u for u, _ in rows], [n for _, n in rows]))
+        while not committing.is_set():
+            await asyncio.sleep(0.005)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await d.close()
+
+    go(interrupted())
+    save = dl_kwargs["save_dir"]
+    done = {f for f in os.listdir(save) if f.endswith(".png")}
+    manifest = [json.loads(x) for x in open(os.path.join(save, "failed_downloads.jsonl"))]
+    interrupted_names = {n for e in manifest for n in e["names"]}
+    assert done, "the commits in progress should have landed"
+    assert not done & interrupted_names                    # never both on disk and in the ledger
+    assert len(done) + len(interrupted_names) == len(rows)
+    assert no_temp_files(save) == []
+
+
 def test_disk_full_stops_run(cdn, dl_kwargs, monkeypatch):
     c = cdn()
     rows = [(c.url(i), f"{i}.png") for i in range(200)]

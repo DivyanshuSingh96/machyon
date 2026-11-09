@@ -102,11 +102,28 @@ class DiskWorkerPool:
     async def call(self, fn, *args):
         return await asyncio.get_running_loop().run_in_executor(self._ex(), fn, *args)
 
-    async def write(self, paths: list[str], data: bytes) -> None:
-        await self.call(write_atomic_sync, paths, data, self.fsync)
+    async def _commit(self, landed, fn, *args) -> None:
+        """Put files in place, then call ``landed()``.
 
-    async def finalize(self, part: str, paths: list[str]) -> None:
-        await self.call(finalize_part_sync, part, paths, self.fsync)
+        A thread can't be stopped halfway through a rename, so a cancelled caller still waits for
+        it and learns whether the files landed. Otherwise Ctrl+C could record a row as interrupted
+        while its file appears on disk a moment later.
+        """
+        fut = asyncio.get_running_loop().run_in_executor(self._ex(), fn, *args)
+        try:
+            await asyncio.shield(fut)
+        except asyncio.CancelledError:
+            await asyncio.wait((fut,))
+            if fut.exception() is None:
+                landed()
+            raise
+        landed()
+
+    async def write(self, paths: list[str], data: bytes, landed=lambda: None) -> None:
+        await self._commit(landed, write_atomic_sync, paths, data, self.fsync)
+
+    async def finalize(self, part: str, paths: list[str], landed=lambda: None) -> None:
+        await self._commit(landed, finalize_part_sync, part, paths, self.fsync)
 
     def shutdown(self) -> None:
         if self._executor is not None:

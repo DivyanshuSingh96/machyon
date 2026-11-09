@@ -9,7 +9,7 @@ AUTO_EXT = ".{ext}"
 
 class Job:
     __slots__ = ("url", "paths", "rel", "host", "rows", "attempt", "part", "part_size", "validator",
-                 "tag", "started", "fut", "tasks", "ext")
+                 "tag", "started", "fut", "tasks", "ext", "landed")
 
     def __init__(self, url: str, path: str, rel: str, host: str, tag: str = "") -> None:
         self.url = url
@@ -26,6 +26,10 @@ class Job:
         self.fut: asyncio.Future | None = None
         self.tasks: tuple = ()
         self.ext: str | None = None     # extension chosen from the sniffed format (auto-ext names)
+        self.landed = False         # the files are in place (set even if the commit outlived a cancel)
+
+    def mark_landed(self) -> None:
+        self.landed = True
 
     def add(self, path: str, rel: str) -> None:
         self.paths.append(path)
