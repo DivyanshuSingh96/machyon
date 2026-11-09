@@ -131,7 +131,9 @@ def test_chunked_responses_without_content_length(cdn, dl_kwargs):
 
 
 def test_429_backs_off_and_finishes(cdn, dl_kwargs):
-    c = cdn("--max-inflight", "6", "--retry-after", "0.2")
+    # 60 ms per response with 6 allowed in flight caps the server at 100 img/s, so 200 images take >= 2 s on any
+    # machine: always longer than the limiter's first 1 s measurement window, so the back-off is observable.
+    c = cdn("--max-inflight", "6", "--retry-after", "0.2", "--rtt", "0.06")
     rows = [(c.url(i), f"{i}.png") for i in range(200)]
     d, m = go(fetch(rows, **{**dl_kwargs, "concurrent_limit": 64, "max_retries": 20}))
     assert files_ok(c, rows, dl_kwargs["save_dir"]) == []
