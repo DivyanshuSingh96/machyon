@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="lab-token" content="{{TOKEN}}">
+<title>Machyon Live Lab</title>
+<link rel="icon" href="/assets/brand/favicon.svg">
+<link rel="stylesheet" href="/assets/css/machyon.css">
+<link rel="stylesheet" href="/live/live.css">
+</head>
+<body data-md-color-scheme="default">
+<main class="md-typeset live">
+  <header class="live-head">
+    <h1>Adaptive Concurrency Lab, live</h1>
+    <button type="button" class="mx-lab-btn quiet" id="theme" aria-label="Switch between light and dark">Dark</button>
+  </header>
+  <p class="lead">Everything on this page is happening now, on this computer: the real Machyon {{VERSION}}
+  downloading from a local test server that tells you everything it sees. Nothing reaches the internet.</p>
+
+  <form id="settings" class="mx-lab-replay live-form" novalidate>
+    <h2>The server</h2>
+    <div class="live-fields">
+      <label>Images <input type="number" name="images" value="1500" min="10" max="3000" step="10" required></label>
+      <label>Limit (requests in flight, 0 = none) <input type="number" name="ceiling" value="24" min="0" max="128" required></label>
+      <label>Time per answer (ms) <input type="number" name="rtt_ms" value="100" min="5" max="500" required></label>
+      <label>Random 503 errors (%) <input type="number" name="p503_percent" value="0" min="0" max="20" required></label>
+    </div>
+    <h2>The runs</h2>
+    <fieldset class="live-presets">
+      <legend class="mx-lab-sr">Which runs</legend>
+      <label><input type="radio" name="preset" value="four" checked> The Lab's four runs (a third of the limit, twice it, adaptive, exactly it)</label>
+      <label><input type="radio" name="preset" value="adaptive"> Adaptive only</label>
+      <label><input type="radio" name="preset" value="custom"> One run of my own:</label>
+    </fieldset>
+    <div class="live-fields" id="custom" hidden>
+      <label>Adaptive <select name="c_adaptive"><option value="true">on</option><option value="false">off (fixed)</option></select></label>
+      <label>Starting requests in flight <input type="number" name="c_concurrency" value="4" min="1" max="256"></label>
+      <label>At most <input type="number" name="c_max" value="256" min="2" max="256"></label>
+    </div>
+    <p class="live-actions"><button type="submit" class="mx-lab-btn" id="go">Run the experiment</button>
+      <span id="note" class="live-note" aria-live="polite"></span></p>
+  </form>
+
+  <section id="now" class="mx-lab-replay" hidden aria-labelledby="now-title">
+    <h2 id="now-title"><span class="mx-lab-tag mx-lab-tag-real">Live</span> <span id="now-run"></span></h2>
+    <div class="mx-lab-stage">
+      <figure class="mx-lab-server" id="now-grid"><figcaption>The server, right now. Each square is a request in flight.</figcaption></figure>
+      <div class="mx-lab-readouts">
+        <div class="mx-lab-source">
+          <h4>Measured at the server</h4>
+          <div class="mx-lab-stat" id="now-inflight"><b>0</b><span>requests in flight now</span></div>
+          <div class="mx-lab-stat"><b id="now-delivered">0</b><span>images delivered so far</span></div>
+          <div class="mx-lab-stat" id="now-429"><b>0</b><span>turned away (429) so far</span></div>
+        </div>
+        <div class="mx-lab-source machyon"><h4>Reported by Machyon</h4>
+          <p class="mx-lab-wait">Machyon reports once each run finishes; the replay below shows it.</p></div>
+      </div>
+    </div>
+    <canvas id="now-chart" class="mx-lab-chart" role="img" aria-label="Requests in flight at the server during this run"></canvas>
+  </section>
+
+  <section id="result" hidden>
+    <h2><span class="mx-lab-tag mx-lab-tag-real">Recorded</span> Your run, replayed</h2>
+    <p>The same recording format the documentation uses, made just now. Download it to keep it.</p>
+    <div id="result-slot"></div>
+  </section>
+</main>
+<script src="/assets/js/lab/recording.js"></script>
+<script src="/assets/js/lab/adaptive-lab.js"></script>
+<script src="/live/live.js"></script>
+</body>
+</html>

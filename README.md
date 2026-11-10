@@ -71,7 +71,7 @@ Downloading a lot of images *looks* trivial, until you do it for real:
 
 ## What Machyon does differently
 
-**🚀 Self-tuning speed.** Concurrency adapts live. It ramps up while throughput improves, backs off the moment a server says "slow down", and remembers the best setting per host for next time.
+**🚀 Self-tuning speed.** Concurrency adapts live. It ramps up while throughput improves, backs off within a second or two when a server says "slow down", and remembers the best setting per host for next time.
 
 **🪃 No straggler tax.** No batches and no barriers: a continuous worker pool. Near the end, any image far slower than its peers gets a second, racing request (*hedging*). The first good answer wins.
 

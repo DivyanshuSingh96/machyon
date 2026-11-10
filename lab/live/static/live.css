@@ -1,0 +1,28 @@
+/* The Live Lab page: the documentation's stylesheet (machyon.css) does the work; this only stands in for the
+   theme's page frame, which the docs get from Zensical. */
+:root { --md-text-font-family: "Figtree", system-ui, sans-serif; }
+body { margin: 0; background: var(--mx-paper); color: var(--mx-ink); font-family: var(--md-text-font-family);
+  font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.live { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.2rem 4rem; }
+.live h1, .live h2 { font-family: var(--mx-head-font); line-height: 1.25; }
+.live h1 { font-size: 1.7rem; margin: 0; }
+.live h2 { font-size: 1.05rem; margin: 1.2rem 0 0.6rem; }
+.live .lead { font-size: 1.05rem; color: var(--mx-muted); }
+.live a { color: var(--mx-accent-ink); }
+[data-md-color-scheme="slate"] .live a { color: var(--mx-accent); }
+.live-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.live-form h2:first-child { margin-top: 0; }
+.live-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem 1rem; }
+.live-fields label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; font-weight: 600; }
+.live-fields input, .live-fields select { font: inherit; font-weight: 400; padding: 0.35rem 0.55rem; border-radius: var(--mx-radius-sm);
+  border: 1px solid var(--mx-line); background: var(--mx-paper); color: var(--mx-ink); }
+.live-fields input:focus-visible, .live-fields select:focus-visible, .live-presets input:focus-visible { outline: 2px solid var(--mx-focus); outline-offset: 2px; }
+.live-presets { border: 0; padding: 0; margin: 0 0 0.6rem; display: grid; gap: 0.3rem; font-size: 0.8rem; }
+.live-presets label { display: flex; gap: 0.5rem; align-items: baseline; }
+.live-actions { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; margin: 1rem 0 0; }
+.live-note { font-size: 0.78rem; color: var(--mx-muted); }
+.live-note.error { color: var(--mx-lab-over); }
+.live .mx-lab-btn:disabled { opacity: .55; cursor: default; }
+.live table { border-collapse: collapse; width: 100%; }
+.live th, .live td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--mx-line); }
+.live code { font-family: "JetBrains Mono", monospace; font-size: 0.85em; }

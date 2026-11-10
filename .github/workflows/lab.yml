@@ -1,0 +1,41 @@
+name: Lab and Cookbook
+
+# The Interactive Lab (recorder, analysis, validators, Live app) and the Cookbook projects. One Linux job: they
+# don't need the 15-job matrix, and it only runs when they, the fake CDN or their browser code change.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lab/**"
+      - "examples/cookbook/**"
+      - "tests/fakecdn.py"
+      - "docs/assets/js/lab/**"
+      - "docs/assets/lab/**"
+      - ".github/workflows/lab.yml"
+  pull_request:
+    paths:
+      - "lab/**"
+      - "examples/cookbook/**"
+      - "tests/fakecdn.py"
+      - "docs/assets/js/lab/**"
+      - "docs/assets/lab/**"
+      - ".github/workflows/lab.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check lab examples/cookbook
+      - run: python -m pytest -q lab/tests examples/cookbook/tests
