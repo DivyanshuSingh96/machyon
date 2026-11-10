@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0.2 (2026-11-10)
 
 **Fixed**
+- **A 429 now pauses every new request to that host, as documented.** A worker checked the host's pause before waiting for a concurrency slot, so workers already queued for a slot when the 429 arrived went straight through once they got one: against a test server sending `Retry-After: 2`, Machyon still sent 208 requests (fixed at 48) or 60 (adaptive) during the wait. The pause is now checked again after a slot is acquired, and a worker that finds its host paused gives the slot back. Jobs for a paused host are set aside until the pause ends instead of being waited out by a worker, so other hosts keep going: before, a worker could sit out a pause holding a paused host's job, and with enough of those jobs at the front of the queue, other hosts got nothing until it ended. Requests already on their way when a 429 arrives still finish; a hedge is never started for a paused host. New regression tests check, from the server's own log, that nothing new arrives during `Retry-After`, that other hosts keep going, and that cancelling during a pause leaks no slots.
 - Pressing Ctrl+C during `machyon download` or `machyon retry` printed a Python traceback. It now says that every file on disk is complete, where the interrupted rows are listed, and to run the same command again to continue, and exits with status 130.
 
 **Documentation**

@@ -12,7 +12,7 @@ asked you to slow down.</p>
 | Outcome | Examples | What happens |
 |---|---|---|
 | **Transient** | timeouts, dropped connections, truncated bodies, empty bodies, TLS resets, HTTP {{ retry_statuses() }} | Retried with backoff, up to `max_retries` times (default 5) |
-| **Throttled** | HTTP 429 | Retried, and the **whole host** pauses (below) |
+| **Throttled** | HTTP 429 | Retried, and new requests to that **host** pause (below) |
 | **Permanent** | any other 4xx (404, 403, 410…), a body that isn't an image, an unusable URL or filename, more than 10 redirects, an untrusted TLS certificate | Recorded immediately. Retrying can't change the answer |
 
 Every reason is listed with its meaning in the [failure reasons reference](../reference/failure-reasons.md).
@@ -45,11 +45,14 @@ seconds, then runs them again with a fresh set of retries. Many outages clear in
 
 A 429 means "this host wants fewer requests". Machyon responds in three ways at once:
 
-1. **The host pauses.** Every worker stops sending to that host, not only the one that got the 429, for as long
-   as `Retry-After` says. Both forms are understood, seconds (`Retry-After: 30`) and an HTTP date. The pause is
+1. **The host pauses.** No worker sends anything new to that host until the `Retry-After` time has passed: not the
+   retry, and not the other rows waiting their turn, including ones that were already queued for a slot when the
+   429 arrived. Requests that were already on their way can't be called back; they finish normally, and a 429 among
+   them extends the pause. Both forms are understood, seconds (`Retry-After: 30`) and an HTTP date. The pause is
    capped at `max_retry_after` (default 120 s) so a misconfigured server can't stall a run for hours. Without a
    `Retry-After`, the pause grows with each retry, up to 30 s.
-2. **Other hosts keep going.** A run that mixes CDNs isn't held hostage by one of them.
+2. **Other hosts keep going.** Rows for a paused host are set aside until its pause ends instead of tying up
+   workers, so a run that mixes CDNs isn't held hostage by one of them.
 3. **Concurrency drops and stays lower.** When 429s reach 1% of attempts in a measurement window, the adaptive
    limiter cuts concurrency to 70% and sets a ceiling at 90% of where the trouble began. The ceiling relaxes
    slowly while things stay calm. [Adaptive concurrency](../performance/adaptive-concurrency.md)

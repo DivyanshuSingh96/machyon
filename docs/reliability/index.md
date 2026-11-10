@@ -17,7 +17,7 @@ Opa, the mascot, has five eyes. Machyon checks every row at five points too:
    disk? Duplicate URLs are fetched once.
 2. **The response.** A transient error is retried with backoff; a permanent one (a 404, an unusable URL) is
    recorded at once instead of wasting retries. [Retries and rate limits](retries-and-rate-limits.md)
-3. **The pace.** A 429 pauses only the host that sent it, for as long as it asked. Concurrency adapts to what the
+3. **The pace.** A 429 pauses new requests to the host that sent it, for as long as it asked; other hosts keep going. Concurrency adapts to what the
    server and your connection can take. [Adaptive concurrency](../performance/adaptive-concurrency.md)
 4. **The bytes.** The body must start with a real image signature, so an HTML error page is never saved as
    `photo.jpg`. Large bodies are checked for their full length and resume after a dropped connection.

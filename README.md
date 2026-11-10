@@ -81,7 +81,7 @@ Downloading a lot of images *looks* trivial, until you do it for real:
 
 **🔁 Resume is just "run it again".** Finished files are skipped in a second or two, even for hundreds of thousands of rows (100,000 in 0.5 s). Large files resume mid-file with HTTP Range requests.
 
-**🤝 Polite by design.** It honours `Retry-After`, a 429 pauses only the host that sent it, retries use jittered backoff, and duplicate URLs are fetched once.
+**🤝 Polite by design.** It honours `Retry-After`: after a 429 it sends nothing new to that host until the wait is over, while other hosts keep going. Retries use jittered backoff, and duplicate URLs are fetched once.
 
 **🧩 A library first.** Use it from sync or async code, with any input (CSV, TSV, TXT, JSON, JSONL, Parquet, DataFrames, iterables), filename templates and typed reports. Small footprint: `aiohttp`, `tqdm`, and `truststore` + `certifi` for browser-grade HTTPS verification.
 
@@ -221,7 +221,7 @@ It checks DNS, your proxy, each TLS trust source and the HTTP response, then tel
 
 ## Responsible use
 
-Machyon is fast, so please be a good citizen. Download only what you have the right to use, respect each site's terms and `robots.txt`, and identify yourself with a `user_agent` when you're collecting data at scale. Machyon helps: it honours `Retry-After`, pauses a host that answers 429 and lowers its concurrency automatically. [Responsible use](https://divyanshusingh96.github.io/machyon/project/responsible-use/)
+Machyon is fast, so please be a good citizen. Download only what you have the right to use, respect each site's terms and `robots.txt`, and identify yourself with a `user_agent` when you're collecting data at scale. Machyon helps: it honours `Retry-After`, sends nothing new to a host that answered 429 until the wait is over, and lowers its concurrency automatically. [Responsible use](https://divyanshusingh96.github.io/machyon/project/responsible-use/)
 
 ## Roadmap
 
