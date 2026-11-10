@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import itertools
 import json
@@ -19,7 +20,7 @@ import logging
 import os
 import time
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from tqdm.auto import tqdm
@@ -34,6 +35,7 @@ from .limiter import AdaptiveLimiter
 from .metrics import MetricsEngine, Report
 from .naming import as_namer
 from .planner import Planner
+from .progress import ProgressSnapshot, _Observer
 from .session import NetworkSessionManager
 from .sources import iter_pairs, read_rows
 from .utils import run, setup_logging
@@ -100,10 +102,18 @@ class Downloader:
 
     ``save_dir`` is where files go. Every :class:`DownloadConfig` field can be passed as a
     keyword (``Downloader("out", max_retries=10, headers={...})``) or via ``config=``.
+
+    ``on_progress``: an optional callable that receives a :class:`ProgressSnapshot` about twice a
+    second while ``download()`` or ``retry_failed()`` runs, and exactly once more when the call ends
+    (with ``done=True``), however it ends. It runs on the downloader's event loop, so keep it light
+    and non-blocking (store the snapshot, or put it on a queue). If it raises, the error is logged
+    once and the download carries on. With no callback, nothing extra runs.
     """
 
     def __init__(self, save_dir: str | os.PathLike = "images", config: DownloadConfig | None = None,
-                 **options) -> None:
+                 on_progress: Callable[[ProgressSnapshot], object] | None = None, **options) -> None:
+        if on_progress is not None and not callable(on_progress):
+            raise TypeError("on_progress must be a callable that takes a ProgressSnapshot")
         cfg = config or DownloadConfig()
         self.config = cfg.replace(**options) if options else cfg
         cfg = self.config
@@ -124,6 +134,8 @@ class Downloader:
         self._warm_started = False
         self._pass_no = 0
         self._auto_metrics = True  # write cfg.metrics_dir entries from download()
+        self._on_progress = on_progress
+        self._obs: _Observer | None = None   # the progress stream of the call in progress, if observed
         self.last_report: Report | None = None
 
     # ------------------------------------------------------------------ lifecycle
@@ -141,6 +153,25 @@ class Downloader:
 
     # ------------------------------------------------------------------ public API
 
+    @contextlib.contextmanager
+    def _observed(self, phase: str):
+        """One progress stream per public call. A nested call (download's final sweep) joins the outer one."""
+        if self._on_progress is None or self._obs is not None:
+            yield self._obs
+            return
+        obs = self._obs = _Observer(self, self._on_progress, phase)
+        obs.start()
+        outcome = "error"
+        try:
+            yield obs
+            outcome = "completed"
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            outcome = "cancelled"
+            raise
+        finally:
+            self._obs = None
+            obs.finish(outcome)
+
     async def download(self, source, names=None, *, url_col: str | None = None, name_col: str | None = None,
                        start: int = 0, end: int | None = None, retry_failures: bool = True) -> Report:
         """Download everything in ``source`` into ``save_dir``.
@@ -156,12 +187,21 @@ class Downloader:
 
         Files already present are skipped, so calling this again resumes an interrupted run.
         """
+        with self._observed("download") as obs:
+            return await self._download(obs, source, names, url_col, name_col, start, end, retry_failures)
+
+    async def _download(self, obs, source, names, url_col, name_col, start, end, retry_failures) -> Report:
         t0 = time.time()
         before = self.metrics.snapshot()
-        first = await self._pass(*self._pairs(source, names, url_col, name_col, start, end))
+        pairs, total = self._pairs(source, names, url_col, name_col, start, end)
+        if obs is not None:
+            obs.begin(total)
+        first = await self._pass(pairs, total)
         mine = set(self.ledger.call_failed)
         if retry_failures and any(k in self.ledger.failed and not is_permanent(self.ledger.failed[k]["reason"])
                                   for k in mine):
+            if obs is not None:
+                obs.phase, obs.sweeping = "retry", True
             await asyncio.sleep(min(5.0, 1.0 + self.config.backoff * 4))
             await self.retry_failed(only=mine)
         still = [k for k in mine if k in self.ledger.failed]
@@ -181,11 +221,17 @@ class Downloader:
         """Retry recorded failures under their original filenames - including failures recorded
         by earlier runs in ``save_dir/failed_downloads.jsonl``. Permanent failures (404, not an
         image, ...) are skipped unless ``include_permanent=True``."""
+        with self._observed("retry") as obs:
+            return await self._retry_failed(obs, include_permanent, only, start, end)
+
+    async def _retry_failed(self, obs, include_permanent, only, start, end) -> Report | None:
         self.ledger.load_once()
         items = self.ledger.retryable(include_permanent, only)
         if not items and not self.ledger.failed and only is None:
             items = [(e["url"], n) for e in self.ledger.read(legacy=True) for n in e["names"]]
         items = items[start:end]
+        if obs is not None and not obs.sweeping:
+            obs.begin(len(items))
         if not items:
             logger.info("No failed downloads to retry.")
             return None
@@ -264,6 +310,8 @@ class Downloader:
                     break
                 plan = planner.plan(shard)
                 rows += plan.rows
+                if self._obs is not None and not self._obs.sweeping:
+                    self._obs.planned += plan.rows
                 m.c["skipped"] += plan.skipped
                 for url, name, reason, row in plan.prefailed:
                     if ledger.mark_failed(name, url, reason, (id(self), self._pass_no, row)):
@@ -276,6 +324,8 @@ class Downloader:
                     await self.engine.run(plan.jobs, bar)
         finally:
             bar.close()
+            if self._obs is not None:
+                self._obs.keys |= ledger.call_failed   # this pass's failures, for the call's running total
             ledger.write()
             if hosts and m.c["downloaded"] > before["downloaded"] and cfg.adaptive and cfg.warm_start:
                 self._profiles.save(hosts.most_common(1)[0][0], self.limiter.limit, self.limiter.rate)

@@ -5,9 +5,11 @@ Everything streams row by row, so a 100-million-line file never has to fit in me
 from __future__ import annotations
 
 import csv
+import itertools
 import json
 import os
 from collections.abc import Iterable, Iterator
+from dataclasses import dataclass, field
 from pathlib import Path
 
 URL_COLUMN_GUESSES = ("url", "image_url", "image_link", "img_url", "link", "src", "image", "href", "uri")
@@ -82,33 +84,40 @@ def _chain(first, rest):
     yield from rest
 
 
-def _read_file(path: Path, url_col: str | None) -> Iterator[Row]:
+FORMATS = {".csv": "csv", ".tsv": "tsv", ".jsonl": "jsonl", ".ndjson": "jsonl", ".json": "json", ".parquet": "parquet"}
+
+
+def _format(path: Path) -> str:
+    return FORMATS.get(path.suffix.lower(), "txt")   # anything else is read as one URL per line
+
+
+def _records(path: Path) -> Iterator:
+    """The raw records of a file, before any URL column is chosen: dicts (tables, JSON objects), URL strings
+    (TXT, a CSV whose first line is already a URL) or [url, name] pairs (JSON). ``.json`` is parsed whole;
+    every other format streams."""
     if not path.exists():
         raise FileNotFoundError(path)
-    suffix = path.suffix.lower()
-    if suffix in (".csv", ".tsv"):
+    fmt = _format(path)
+    if fmt in ("csv", "tsv"):
         with open(path, newline="", encoding="utf-8-sig") as f:
             sample = f.read(4096)
             f.seek(0)
-            delimiter = "\t" if suffix == ".tsv" else ("\t" if sample.count("\t") > sample.count(",") else ",")
+            delimiter = "\t" if fmt == "tsv" else ("\t" if sample.count("\t") > sample.count(",") else ",")
             reader = csv.reader(f, delimiter=delimiter)
             header = next(reader, None)
             if header is None:
                 return
             if any(_looks_like_url(c) for c in header):  # no header row: the first line is data
                 for row in _chain(header, reader):
-                    url = next((c for c in row if _looks_like_url(c)), row[0] if row else "")
                     if row and any(row):
-                        yield url.strip(), None
+                        yield next((c for c in row if _looks_like_url(c)), row[0]).strip()
                 return
             n = len(header)
-            dict_rows = (dict(zip(header, row + [None] * (n - len(row)), strict=False)) for row in reader if any(row))
-            yield from _dict_rows(dict_rows, url_col)
-    elif suffix in (".jsonl", ".ndjson"):
+            yield from (dict(zip(header, row + [None] * (n - len(row)), strict=False)) for row in reader if any(row))
+    elif fmt == "jsonl":
         with open(path, encoding="utf-8") as f:
-            items = (json.loads(line) for line in f if line.strip())
-            yield from read_rows(items, url_col)
-    elif suffix == ".json":
+            yield from (json.loads(line) for line in f if line.strip())
+    elif fmt == "json":
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict):  # {"images": [...]} or a single {"url": ...}
@@ -119,25 +128,119 @@ def _read_file(path: Path, url_col: str | None) -> Iterator[Row]:
             if len(lists) > 1:
                 raise ValueError(f"JSON object has several URL lists {lists}; pass the list itself")
             data = data[lists[0]] if lists else [data]
-        yield from read_rows(data, url_col)
-    elif suffix == ".parquet":
+        if not isinstance(data, list):
+            raise ValueError("JSON must be a list of URLs or objects, or an object holding one")
+        yield from data
+    elif fmt == "parquet":
         try:
             import pyarrow.parquet as pq
         except ImportError as e:
             raise ImportError("Reading Parquet needs pyarrow: pip install 'machyon[parquet]'") from e
         pf = pq.ParquetFile(path)
-
-        def batches() -> Iterator[dict]:
-            for b in pf.iter_batches(batch_size=65536):
-                yield from b.to_pylist()
-
-        yield from _dict_rows(batches(), url_col)
+        for b in pf.iter_batches(batch_size=65536):
+            yield from b.to_pylist()
     else:  # .txt or anything else: one URL per line, '#' comments allowed
         with open(path, encoding="utf-8-sig") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#"):
-                    yield line, None
+                    yield line
+
+
+def _read_file(path: Path, url_col: str | None) -> Iterator[Row]:
+    yield from read_rows(_records(path), url_col)
+
+
+# ---------------------------------------------------------------------- inspecting a source
+
+
+@dataclass(frozen=True)
+class SourceInspection:
+    """A look at the first rows of a source file: what ``download()`` would read from it.
+
+    format: ``"csv"``, ``"tsv"``, ``"txt"``, ``"json"``, ``"jsonl"`` or ``"parquet"`` (from the file extension;
+        anything unrecognised is read as one URL per line, like ``download()`` does).
+    columns: the column names, for tables and lists of objects; ``None`` for a plain list of URLs (a TXT file, a
+        CSV whose first line is already a URL, a JSON list of URLs or of ``[url, name]`` pairs).
+    url_col: the column ``download()`` would take the URLs from: the one you named, or the guessed one; ``None``
+        when there are no columns, or when it can't be guessed (see ``error``).
+    url_col_guessed: ``True`` when ``url_col`` was guessed rather than named.
+    rows: up to ``limit`` rows as dicts, in file order. A plain list of URLs gives ``{"url": ...}`` (and
+        ``"name"`` for pairs).
+    urls: the URL of each of those rows (``""`` where a row has none).
+    more: ``True`` if the source has more rows than ``limit``. Nothing here counts the rows in the whole source.
+    error: ``None``, or what went wrong, as ``(kind, message)``. Kinds: ``"not_found"``, ``"empty"``,
+        ``"unreadable"`` (malformed or not text), ``"missing_dependency"``, ``"no_url_column"``,
+        ``"unknown_column"``. With ``"no_url_column"`` and ``"unknown_column"``, ``columns`` and ``rows`` are still
+        filled in, so a caller can let the user pick the column.
+    """
+
+    format: str
+    columns: list[str] | None = None
+    url_col: str | None = None
+    url_col_guessed: bool = False
+    rows: list[dict] = field(default_factory=list)
+    urls: list[str] = field(default_factory=list)
+    more: bool = False
+    error: tuple[str, str] | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+
+def inspect(path: str | os.PathLike, url_col: str | None = None, limit: int = 20) -> SourceInspection:
+    """Read the first ``limit`` rows of a source file the way ``download()`` reads them, without reading the rest.
+
+    The same reader as ``download()`` is used, so the columns, the guessed URL column and the URLs are the ones a
+    download would use. Plain ``.json`` files are parsed whole (as ``download()`` does); every other format stops
+    after ``limit + 1`` rows. Never raises for a problem with the file: see ``SourceInspection.error``.
+    """
+    path = Path(path)
+    fmt = _format(path)
+    limit = max(0, int(limit))
+    try:
+        it = iter(_records(path))
+        head = list(itertools.islice(it, limit + 1))
+    except FileNotFoundError:
+        return SourceInspection(fmt, error=("not_found", f"No such file: {path}"))
+    except ImportError as e:
+        return SourceInspection(fmt, error=("missing_dependency", str(e)))
+    except (UnicodeDecodeError, csv.Error, ValueError, OSError, TypeError) as e:
+        return SourceInspection(fmt, error=("unreadable", f"{type(e).__name__}: {e}"))
+    except Exception as e:  # pyarrow and friends raise their own types for a broken file
+        return SourceInspection(fmt, error=("unreadable", f"{type(e).__name__}: {e}"))
+    more = len(head) > limit
+    head = head[:limit]
+    if not head:
+        return SourceInspection(fmt, error=("empty", "The source has no rows."))
+    first = head[0]
+    if isinstance(first, dict):
+        columns = [str(c) for c in first.keys()]
+        rows = [dict(r) if isinstance(r, dict) else {"value": r} for r in head]
+        guessed = url_col is None
+        if url_col is not None and url_col not in first:
+            return SourceInspection(fmt, columns, None, False, rows, [], more,
+                                    ("unknown_column", f"Column '{url_col}' not found. Columns: {columns}"))
+        try:
+            col = url_col or _guess_url_col(list(first.keys()), first)
+        except ValueError as e:
+            return SourceInspection(fmt, columns, None, False, rows, [], more, ("no_url_column", str(e)))
+        urls = ["" if r.get(col) is None else str(r.get(col)).strip() for r in rows]
+        return SourceInspection(fmt, columns, col, guessed, rows, urls, more)
+    rows, urls = [], []
+    for item in head:
+        if isinstance(item, (list, tuple)):
+            url = "" if not item else str(item[0]).strip()
+            row = {"url": url}
+            if len(item) > 1 and item[1] is not None:
+                row["name"] = item[1]
+        else:
+            url = "" if item is None else str(item).strip()
+            row = {"url": url}
+        rows.append(row)
+        urls.append(url)
+    return SourceInspection(fmt, None, None, False, rows, urls, more)
 
 
 class BadName(str):
