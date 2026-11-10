@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Machyon</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/theme.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="bar">
+    <div class="bar-in">
+      <a class="brand" href="#/" aria-label="Machyon home">
+        <img class="on-light" src="/static/opa-symbol-light.svg" alt="">
+        <img class="on-dark" src="/static/opa-symbol-dark.svg" alt="">
+        <b>machyon</b><small>UI</small>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="#/" data-nav="home">Home</a>
+        <a href="#/new" data-nav="new">New download</a>
+        <a href="#/history" data-nav="history" hidden>History</a>
+      </nav>
+      <span class="grow"></span>
+      <a class="live-pill" id="live" href="#/" hidden>Downloading…</a>
+      <button class="btn ghost icon" id="theme" type="button" aria-label="Switch to dark theme" title="Theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <p class="sr" id="announce" aria-live="polite"></p>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="locked">Machyon UI needs JavaScript.</p></noscript>
+</body>
+</html>
