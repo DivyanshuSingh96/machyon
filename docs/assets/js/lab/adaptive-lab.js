@@ -447,30 +447,51 @@
   const CHOICES = [
     ["same", "It keeps the same number in flight: the 429s get retried anyway."],
     ["more", "It sends more, to make up for the time lost."],
-    ["now", "It cuts back straight away, within the same second."],
-    ["later", "It cuts back, but a second or two later."],
+    ["cut", "It keeps sending, and lowers how many requests it keeps in flight."],
+    ["pause", "It stops sending to that server for as long as it asked, and lowers how many it keeps in flight."],
   ];
+  const QUIET_MARGIN_MS = 300;   // requests Machyon sent before it saw the 429 may still arrive just after it
+
+  /** What the recording shows after the server's first 429, as two separate mechanisms:
+      the host pause (nothing new is sent until Retry-After has passed), from the server's events, and
+      the limiter's cut (judged over one-second windows), from the most in flight in each second afterwards. */
+  function predictionFacts(rec) {
+    const run = rec.runs.find((r) => r.name === "adaptive");
+    const reaction = run && run.analysis.reaction_to_429;
+    if (!reaction) return null;
+    const before = reaction.inflight_peak_before, after = reaction.inflight_peak_by_second_after;
+    const first = reaction.first_429_ms;
+    const next = window.MachyonLab.eventsOf(run).find((e) => e.event === "start" && e.t_ms > first + QUIET_MARGIN_MS);
+    const quietMs = next ? next.t_ms - first : null;
+    // A second that the host pause covered for at least half of it says nothing about the limit: the server is
+    // simply empty. A cut is a real drop (at least a fifth below the peak) in a second Machyon was sending.
+    const paused = after.map((_, k) => next !== undefined && next.t_ms >= first + k * 1000 + 500);
+    const firstCut = after.findIndex((v, k) => !paused[k] && v !== null && v <= 0.8 * before);
+    const retryAfter = (rec.notes && rec.notes.retry_after_s) || null;
+    const pausedForRetryAfter = Boolean(retryAfter && quietMs !== null && quietMs >= 0.8 * retryAfter * 1000);
+    const answer = firstCut === -1 ? (after.some((v) => v !== null && v > before) ? "more" : "same")
+      : pausedForRetryAfter ? "pause" : "cut";
+    return { reaction, before, after, firstCut, quietMs, retryAfter, paused: pausedForRetryAfter, pausedSeconds: paused,
+      answer };
+  }
 
   async function mountPredict(node) {
     let rec;
     try { rec = await recording(node); } catch (e) { return failed(node, e); }
-    const run = rec.runs.find((r) => r.name === "adaptive");
-    const reaction = run && run.analysis.reaction_to_429;
-    if (!reaction) {
+    const facts = predictionFacts(rec);
+    if (!facts) {
       node.replaceChildren(el("p", { text: "In this recording the adaptive run never met the server's limit, so " +
         "there is nothing to predict. The replay below shows what it did instead." }));
       return;
     }
-    const before = reaction.inflight_peak_before;
-    const after = reaction.inflight_peak_by_second_after;
-    // A cut is a real drop (at least a fifth below the peak), not a request or two of noise.
-    const firstCut = after.findIndex((v) => v !== null && v <= 0.8 * before);
-    const answer = firstCut === -1 ? (after.some((v) => v !== null && v > before) ? "more" : "same")
-      : firstCut === 0 ? "now" : "later";
+    const { reaction, before, after, firstCut, quietMs, retryAfter, answer } = facts;
+    const later = "Machyon judges its speed over one-second windows and changes its limit only when a window ends, " +
+      "so the cut shows up a second or two after the first 429.";
     const why = {
-      later: "Machyon measures its speed over one-second windows and changes its limit only when a window ends, " +
-        "so the cut comes a second or two after the first 429. Requests already on their way also have to finish.",
-      now: "In this recording the cut came within the first second.",
+      pause: `Two separate things happened. The 429 asked for a pause (Retry-After: ${retryAfter} s), and Machyon ` +
+        `stopped sending to that server straight away: it heard nothing new for ${secs(quietMs)}. Requests already ` +
+        `on their way still finished. The limit came down separately, and later. ${later}`,
+      cut: `${later} In this recording Machyon kept sending in the meantime.`,
       same: "In this recording Machyon kept the same number in flight.",
       more: "In this recording Machyon sent more.",
     }[answer];
@@ -489,10 +510,11 @@
       return el("div", { class: "mx-lab-answer-bars", role: "img", "aria-label": `Most in flight: ${before} before the first ` +
         `429, then ${after.map((v) => num(v)).join(", ")} in each of the next five seconds` },
         // coral where the server was over its limit; the first real cut is marked
-        vals.map((v, i) => el("div", { class: `bar${ceiling && v > ceiling ? " over" : ""}${i - 1 === firstCut ? " cut" : ""}` },
+        vals.map((v, i) => el("div", { class: `bar${ceiling && v > ceiling ? " over" : ""}${i - 1 === firstCut ? " cut" : ""}` +
+          `${i > 0 && facts.pausedSeconds[i - 1] ? " paused" : ""}` },
           el("span", { class: "fill", style: `height:${((v || 0) / max * 100).toFixed(1)}%` },
             el("b", { text: num(v) })),
-          el("small", { text: i === 0 ? "before" : `${i - 1}–${i} s` }))),
+          el("small", { text: i === 0 ? "before" : i > 0 && facts.pausedSeconds[i - 1] ? `${i - 1}–${i} s, paused` : `${i - 1}–${i} s` }))),
         ceiling ? el("span", { class: "limit", style: `bottom:${(ceiling / max * 100).toFixed(1)}%` },
           el("small", { text: `limit ${ceiling}` })) : null);
     }
@@ -509,14 +531,15 @@
           const c = controllers.get(urlOf(node));
           if (!c) return;
           c.select("adaptive");
-          c.seek(Math.max(0, reaction.first_429_ms - 2500));
+          c.seek(Math.max(0, reaction.first_429_ms - 1500));
           c.node.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
           c.play();
         } });
       result.replaceChildren(
         el("p", { class: right ? "yes" : "no", text: right ? "That's what happened." : "Not quite. Here's what happened." }),
         el("p", { text: `The server sent its first 429 at ${secs(reaction.first_429_ms)}, with ${before} requests ` +
-          `in flight. The most in flight in each of the next five seconds: ${after.map((v) => num(v)).join(", ")}.` }),
+          `in flight.` + (facts.paused ? ` It then received nothing new for ${secs(quietMs)}.` : "") +
+          ` The most in flight in each of the next five seconds: ${after.map((v) => num(v)).join(", ")}.` }),
         bars(),
         el("p", { text: why }),
         watch);
@@ -634,7 +657,9 @@
     function geometry() {
       const dpr = window.devicePixelRatio || 1;
       const w = Math.max(280, canvas.clientWidth || node.clientWidth || 600), h = w < 520 ? 210 : 250;
-      return { dpr, w, h, x: (ms) => PAD.l + ms / maxSpan * (w - PAD.l - PAD.r),
+      // the chosen run fills the chart; with the other runs shown, the longest one sets the scale
+      const span = showOthers ? maxSpan : cur.span;
+      return { dpr, w, h, span, x: (ms) => PAD.l + ms / span * (w - PAD.l - PAD.r),
         y: (n) => PAD.t + (1 - n / (maxPeak * 1.12)) * (h - PAD.t - PAD.b - 22) };
     }
     function drawBase() {
@@ -652,7 +677,7 @@
         ctx.beginPath(); ctx.moveTo(PAD.l, g.y(n)); ctx.lineTo(g.w - PAD.r, g.y(n)); ctx.stroke();
         ctx.fillText(String(n), 6, g.y(n) + 4);
       }
-      for (let s = 0; s * 1000 <= maxSpan; s += maxSpan > 30000 ? 10 : 5) {
+      for (let s = 0; s * 1000 <= g.span; s += g.span > 60000 ? 20 : g.span > 30000 ? 10 : g.span > 12000 ? 5 : 2) {
         ctx.fillText(`${s} s`, g.x(s * 1000) - 6, g.h - 6);
       }
       const series = (r) => r.run.analysis.series;
@@ -877,7 +902,7 @@
     let dragging = false;
     const toTime = (ev) => {
       const r = canvas.getBoundingClientRect(), g = base.g;
-      return clamp((ev.clientX - r.left - PAD.l) / (g.w - PAD.l - PAD.r) * maxSpan, 0, cur.span);
+      return clamp((ev.clientX - r.left - PAD.l) / (g.w - PAD.l - PAD.r) * g.span, 0, cur.span);
     };
     canvas.addEventListener("pointerdown", (ev) => {
       if (!base) return;
@@ -954,9 +979,10 @@
     }
   }
   // the Live app (lab/live) mounts widgets on a fresh recording, and draws the same stage and instruments while it runs
-  // answerKind, answerFor and placeRequests are pure: the Live app follows the same rules, and lab/tests check them
+  // answerKind, answerFor, placeRequests and predictionFacts are pure: the Live app follows the same rules, and
+  // lab/tests check them
   window.MachyonLab = Object.assign(window.MachyonLab || {},
-    { mountAll: init, createStage, createInstruments, answerKind, answerFor, placeRequests });
+    { mountAll: init, createStage, createInstruments, answerKind, answerFor, placeRequests, predictionFacts });
   if (window.document$ && typeof window.document$.subscribe === "function") window.document$.subscribe(init);
   else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

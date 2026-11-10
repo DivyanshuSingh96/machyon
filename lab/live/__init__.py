@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS_ASSETS = ROOT / "docs" / "assets"
 STATIC = Path(__file__).resolve().parent / "static"
 MAX_ESTIMATED_SECONDS = 240
+RETRY_AFTER_S = 1             # what the server asks for with every 429
 
 LIMITS = {
     "images": (10, 3000),
@@ -94,11 +95,15 @@ def build_experiment(settings) -> Experiment:
         if ceiling:
             effective = min(effective, ceiling)
         estimate += images * (2 * rtt_ms / 1000) / max(1, effective)
+        if ceiling and (adaptive or conc > ceiling):
+            # Machyon honours Retry-After: past the limit, every round of 429s pauses the server's host. A fixed setting
+            # above the limit pays that every round; adaptive only a few times before its limit comes down.
+            estimate += 3 * RETRY_AFTER_S if adaptive else images / ceiling * RETRY_AFTER_S
     if estimate > MAX_ESTIMATED_SECONDS:
         raise BadSettings(f"these settings could take about {estimate:.0f} s; keep it under "
                           f"{MAX_ESTIMATED_SECONDS} s (fewer images, lower latency or more requests in flight)")
     rtt = f"{rtt_ms / 1000:.3f}"
-    cdn = ["--rtt", rtt, "--handshake", rtt, "--retry-after", "1", "--seed", "7"]
+    cdn = ["--rtt", rtt, "--handshake", rtt, "--retry-after", str(RETRY_AFTER_S), "--seed", "7"]
     if ceiling:
         cdn += ["--max-inflight", str(ceiling)]
     if p503:
