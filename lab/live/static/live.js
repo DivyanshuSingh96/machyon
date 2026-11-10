@@ -99,7 +99,8 @@
       if (!r) return;
       open.delete(e.id);
       (r.over ? freeDoor : freeSlots).push(r.place);
-      stage.spawn(r.over ? "turned" : e.status === 429 ? "turnedSlot" : e.status === 200 ? "img" : "err", r.place, delay);
+      const a = window.MachyonLab.answerFor({ over: r.over, status: e.status, outcome: e.outcome });  // same rules as the replay
+      stage.answer(a.from, r.place, a.kind, delay);
     }
   }
 

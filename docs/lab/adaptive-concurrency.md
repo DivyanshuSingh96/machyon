@@ -13,7 +13,8 @@ the server starts saying no. Get a feel for it, guess what Machyon does, then wa
   <div><b>Model</b><span>Section 1 is an idealised server, to build intuition. Nothing in it was measured.</span></div>
   <div><b>Recorded</b><span>Sections 2 to 4 replay a real run: the real Machyon, a real local server, every
   request it saw.</span></div>
-  <div><b>Live</b><span>Record the same experiment on your own computer: see the end of the page.</span></div>
+  <div><b>Live</b><span>Watch Machyon run the same experiment on your own computer, as it happens: see the end of
+  the page.</span></div>
 </div>
 
 ## 1. Feel the limit
@@ -61,9 +62,10 @@ Each run started from a reset server and an empty folder, with nothing remembere
 
 What the runs show:
 
-- **Staying under the limit never gets you throttled**, but at 8 requests two-thirds of the server sat idle.
-- **Pushing past it is worse than being timid.** At 48 requests, about half of every round came back as 429, and
-  each one had to wait for the server's `Retry-After` before trying again.
+- **On this server, staying under the limit never got throttled**, but at 8 requests two-thirds of the server sat
+  idle.
+- **Here, pushing past it was slower than being timid.** At 48 requests, about half of every round came back as 429,
+  and each one had to wait for the server's `Retry-After` before trying again.
 - **Adaptive overshot, noticed, and cut back.** It didn't react instantly: Machyon judges its speed in one-second
   windows, so the cut came a second or two after the first 429. It also remembers where it got into trouble: from
   then on it climbs only a little at a time and never goes back up to the level that got it throttled. Sometimes
@@ -71,6 +73,11 @@ What the runs show:
   happens depends on timing, so a run on your computer can show either.
 - **Knowing the limit in advance is still fastest.** Adaptive is what you get when you don't know it, which is
   almost always. It beat both guesses without being told anything.
+
+These are single runs of each setting against one simulated server. It answers each request after about 100 ms,
+turns away anything beyond 24 requests in flight with a 429 and `Retry-After: 1`, and limits nothing else. Real
+servers can also limit requests per second or bandwidth, and penalise more or less harshly, so the best setting, and
+how much adaptive gains, depends on the server and the network.
 
 The exact rules (doubling, reverting, probing, backing off) are on
 [Adaptive concurrency](../performance/adaptive-concurrency.md), with a simulator that runs Machyon's actual
@@ -88,17 +95,30 @@ Two sources, never mixed on the same chart:
 
 <div class="mx-lab-provenance" data-lab-provenance data-recording="../../assets/lab/recordings/adaptive-concurrency.json"></div>
 
-## Record it yourself
+## Run it yourself
 
-The recording is a plain JSON file made by the real library. To make your own from a clone of the repository:
+<span class="mx-lab-tag mx-lab-tag-real">Live</span> From a clone of the repository, start the Live Lab:
 
 ```bash
-pip install -e ".[dev]"
+pip install -e .
+python -m lab.live
+```
+
+It opens in your browser at `http://127.0.0.1:8770/` and runs the same experiment: the real Machyon downloading from
+the same local test server. While each run is going you watch what the server sees, on the same stage as above. When
+the runs finish, it replays them with this page's own widgets, and you can download the recording. You can also
+change the server's limit, its response time and the number of images, or try a single run of your own. Nothing
+reaches the internet. To stop it, press Ctrl+C in the terminal.
+
+Your times will differ a little, and the adaptive run may take the other path after its first cut (settling below
+the limit, or touching it once more); the pattern above holds either way.
+
+To make only the recording file, without the browser:
+
+```bash
 python -m lab.record adaptive_concurrency --out my-run.json
 ```
 
-It starts the fake CDN on `127.0.0.1`, runs all four runs (about a minute), and writes the same kind of file you
-just watched. Nothing reaches the internet. Your times will differ a little, and the adaptive run may take the other
-path after its first cut (settling below the limit, or touching it once more); the pattern above holds either way.
-The format is described in
+This runs the same four runs (about a minute) and writes the JSON file. It doesn't open anything, and this page
+can't load your file. The format is described in
 [`lab/README.md`](https://github.com/DivyanshuSingh96/machyon/blob/main/lab/README.md).
