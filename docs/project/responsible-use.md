@@ -23,7 +23,8 @@ happy to serve them at that rate.</p>
 
 ## What Machyon does for you
 
-- Honours `Retry-After`, and pauses the whole host when it sees a 429.
+- Honours `Retry-After`: after a 429, it sends nothing new to that host until the wait is over. Requests already on
+  their way when the 429 arrived still finish.
 - Lowers its concurrency automatically on rate limits and error bursts, and remembers a ceiling.
 - Fetches a URL that appears on several rows only once.
 - Never retries permanent failures automatically, so dead links cost one request, not six.

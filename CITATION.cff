@@ -5,8 +5,8 @@ type: software
 authors:
   - family-names: Singh
     given-names: Divyanshu
-version: 1.0.1
-date-released: 2026-11-09
+version: 1.0.2
+date-released: 2026-11-10
 license: MIT
 repository-code: "https://github.com/DivyanshuSingh96/machyon"
 url: "https://divyanshusingh96.github.io/machyon/"

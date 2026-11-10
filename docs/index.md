@@ -71,7 +71,7 @@ Concurrency ramps up while throughput improves and backs off within a second or 
 
 <div class="mx-card" markdown>
 ### Polite to servers
-Honours `Retry-After`. A 429 pauses only the host that sent it. Duplicate URLs are fetched once.
+Honours `Retry-After`: after a 429, nothing new goes to that host until the wait is over, and other hosts keep going. Duplicate URLs are fetched once.
 [Retries and rate limits](reliability/retries-and-rate-limits.md)
 </div>
 

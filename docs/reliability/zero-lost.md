@@ -38,7 +38,7 @@ Three more promises make the contract useful in practice:
     runs, other slices or other processes are merged, never overwritten. [Resuming](resuming.md)
 
 **Polite under pressure.**
-:   `Retry-After` is honoured, a 429 pauses the host that sent it, and concurrency backs off automatically. Being
+:   `Retry-After` is honoured, a 429 pauses new requests to the host that sent it, and concurrency backs off automatically. Being
     reliable never means hammering a server. [Retries and rate limits](retries-and-rate-limits.md)
 
 ## Where it stops

@@ -7,7 +7,7 @@ This document describes Machyon independently of Python. It is the contract a po
 1. **Every input row ends in exactly one state:** written, skipped (already complete on disk), or recorded as failed with a reason. Nothing is silently dropped, not even on Ctrl+C or a full disk.
 2. **A file that exists is complete.** Files appear only through an atomic rename of a fully written temporary file.
 3. **Re-running is resuming.** Complete files are skipped, and recorded failures are merged, never overwritten.
-4. **Polite under pressure.** `Retry-After` is honoured, a 429 pauses the throttling host, and concurrency backs off automatically.
+4. **Polite under pressure.** `Retry-After` is honoured, a 429 pauses new requests to the throttling host, and concurrency backs off automatically.
 
 ## Modules
 
@@ -39,7 +39,7 @@ This document describes Machyon independently of Python. It is the contract a po
 | `sources` | Stream `(url, row)` from CSV/TSV/TXT/JSON/JSONL/Parquet/DataFrames/iterables. Guess the URL column. |
 | `naming` | Turn `(url, index, row)` into a relative filename via a template (`{index} {hash} {stem} {ext} {host} {column}`). `{ext}` is "auto" when the URL has no image extension. |
 | `planner` | Per shard: validate the URL (http/https and host), sanitize/contain the name, de-duplicate URLs (one job serves many rows), detect name conflicts, and skip complete files (non-empty, optionally sniffed). Cleans stale temp files. |
-| `engine` | One shared ready-queue and N workers. A worker takes a job, waits for any host pause, acquires a limiter slot, runs one attempt, then finishes or reschedules. Hedging, teardown. |
+| `engine` | One shared ready-queue and N workers. A worker takes a job (a job for a paused host is parked until the pause ends), acquires a limiter slot, checks the host's pause again, runs one attempt, then finishes or reschedules. Hedging, teardown. |
 | `fetcher` | One attempt: status handling, body validation by magic bytes, small-body write, or streaming with resume. |
 | `limiter` | Semaphore with a variable capacity (see below). |
 | `disk` | Thread pool. `write_atomic(paths, bytes)`, `finalize(part, paths)`, Windows sharing-violation retries. |
@@ -57,7 +57,7 @@ This document describes Machyon independently of Python. It is the contract a po
 | 206 matching our `Range` and intact part file | append, then **ok** when the size matches |
 | 416 while resuming and `Content-Range: */N == part_size` | **ok**: finalize the part |
 | 408, 425, 500, 502, 503, 504, 520–524 | **retry** (honour `Retry-After`) |
-| 429 | **throttle**: retry, and pause the *host* for `Retry-After` (or a backoff) |
+| 429 | **throttle**: retry, and pause new requests to the *host* for `Retry-After` (or a backoff) |
 | other 4xx | **fail** `http_<code>` (permanent) |
 | timeout, connection reset, truncated body, empty body | **retry** |
 | disk full / read-only / quota | **fatal**: stop all workers, record unfinished rows, raise |
