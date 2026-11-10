@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased (1.1.0)
+
+**Added**
+- A Google Colab notebook, [`notebooks/machyon-colab.ipynb`](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb): paste links or upload a CSV, choose the URL column, filename template and speed in a form, then see the report, a gallery of up to 24 images and every failure with its reason, retry the failures, and take the images as a ZIP or to Google Drive. It also runs in Jupyter. Linked from the README, the home page and the Cookbook, and tested offline against the local test server.
+
 ## 1.0.2 (2026-11-10)
 
 **Fixed**

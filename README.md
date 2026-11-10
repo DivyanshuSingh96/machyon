@@ -8,6 +8,7 @@
   <a href="https://github.com/DivyanshuSingh96/machyon/actions"><img alt="CI" src="https://github.com/DivyanshuSingh96/machyon/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/DivyanshuSingh96/machyon/blob/main/LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-2A3142"></a>
   <a href="https://divyanshusingh96.github.io/machyon/"><img alt="Docs" src="https://img.shields.io/badge/docs-machyon-2A3142"></a>
+  <a href="https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb"><img alt="Open in Colab" src="https://colab.research.google.com/assets/colab-badge.svg"></a>
 </p>
 
 <p align="center">
@@ -29,6 +30,8 @@ print(report)
 ```
 
 That's it. No thread counts to tune, no retry loops to write, no half-written files to clean up.
+
+No Python setup? [Open the Colab notebook](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb): paste links or upload a CSV, and get the images back as a ZIP or in your Google Drive.
 
 **[Read the documentation →](https://divyanshusingh96.github.io/machyon/)**
 
