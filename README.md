@@ -95,20 +95,21 @@ Downloading a lot of images *looks* trivial, until you do it for real:
   <img alt="Images per second: Machyon vs img2dataset across five network scenarios" src="https://raw.githubusercontent.com/DivyanshuSingh96/machyon/main/assets/benchmark-light.svg">
 </picture>
 
-| Scenario (images) | Machyon 1.0 | img2dataset 1.47, defaults | img2dataset, best tuning |
+| Scenario (images) | Machyon 1.1 | img2dataset 1.47, defaults | img2dataset, best tuning |
 |---|---|---|---|
-| Clean network, 80 ms RTT (5,000) | **820 img/s**, 0 lost | 538 img/s, 0 lost | 565 (`retries=3`) |
-| Real-world faults (5,000) | **519 img/s**, 0 lost, 0 bogus | 257 img/s, **97 lost, 10 bogus** | 268, 0 lost but **10 bogus** (`retries=3`) |
-| Rate-limited CDN, max 48 in flight (3,000) | **343 img/s**, 0 lost | 0.6 img/s, **2,997 lost** | 222 (hand-tuned to 24 in flight) |
-| Slow link, 2.3 MB/s (2,000) | **114 img/s** | 95 img/s | 96 |
-| High latency, 350 ms (3,000) | 219 img/s | 214 img/s | 224 (`retries=3`) |
+| Clean network, 80 ms RTT (5,000) | **840 img/s**, 0 lost | 621 img/s, 0 lost | 649 (`retries=3`) |
+| Real-world faults (5,000) | **524 img/s**, 0 lost, 0 bogus | 250 img/s, **99 lost, 10 bogus** | 275, 0 lost but **10 bogus** (`retries=3`) |
+| Rate-limited CDN, max 48 in flight (3,000) | **301 img/s**, 0 lost | 1.2 img/s, **2,995 lost** | 224 (hand-tuned to 24 in flight) |
+| Slow link, 2.3 MB/s (2,000) | **114 img/s** | 98 img/s | 98 (defaults) |
+| High latency, 350 ms (3,000) | **243 img/s** | 232 img/s | 232 (defaults) |
 
 *Lost* means a row that could have succeeded but has no file. *Bogus* means a file that isn't the image: an HTML error page saved as `.jpg`.
 
 **How this was measured.**
 - Both tools downloaded from the same local fault-injecting CDN ([`benchmarks/fakecdn.py`](https://github.com/DivyanshuSingh96/machyon/blob/main/benchmarks/fakecdn.py)). The "real-world faults" scenario injects slow tails, 503s, dropped connections, stalls, 404s, HTML soft-404s and odd content types. Every saved file was compared byte-for-byte with the original.
 - img2dataset was given its fastest raw-download settings: no resizing, no re-encoding, no EXIF or hash work, 2 processes.
-- Times are wall-clock, including process start-up, on a 2-vCPU machine shared with the CDN.
+- Times are wall-clock, including process start-up, on a 2-vCPU machine shared with the CDN. Each figure is the median of three runs (Machyon 1.1.0, 2026-11-10).
+- On the rate-limited CDN, Machyon waits out every `Retry-After` since 1.0.2, so it sends far fewer requests the server refuses (33 429s, down from 264 with 1.0.0) for a little less speed (301 img/s, against 343).
 - **Your numbers will differ.** On a fast connection Machyon is usually limited by the network, not by itself. Reproduce with [`benchmarks/harness.py`](https://github.com/DivyanshuSingh96/machyon/blob/main/benchmarks/harness.py).
 
 **Where img2dataset is the better choice:** it's a superb tool built for a different job. It does resizing, WebDataset/Parquet shards, captions, and distributed runs on Spark or Ray for hundreds of millions of images on big clusters. Below that scale, on the machine you already have, Machyon is the embeddable, self-tuning downloader that accounts for every file.

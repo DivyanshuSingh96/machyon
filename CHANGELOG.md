@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (1.1.0)
+## 1.1.0 (2026-11-10)
 
 **Added**
 - **`machyon ui`**: Machyon as a local app in your browser. Paste links or upload a manifest (CSV, TSV, TXT, JSON, JSONL or Parquet), see the first rows and pick the URL column, preview the file each row becomes, choose the speed and retry settings, then watch the real progress and read the report. Every run is kept in its own folder under `~/machyon-downloads` (images, the original manifest, `run.json`, `report.json`), so the history survives a restart. After a run: a gallery of up to 24 images, every failure with its reason (links shown without passwords or query values), retrying failures (permanent ones only after confirming), resuming an interrupted run with its original manifest, names and settings, opening or copying the folder, downloading the report, and deleting a run after confirming. Light and dark themes, keyboard navigation and reduced motion. The app listens on 127.0.0.1 only and needs the key in the link it prints. No new dependency. A manifest file literally named `ui` now needs `machyon download ui`.
@@ -9,6 +9,7 @@
 - A Google Colab notebook, [`notebooks/machyon-colab.ipynb`](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb): paste links or upload a CSV, choose the URL column, filename template and speed in a form, then see the report, a gallery of up to 24 images and every failure with its reason, retry the failures, and take the images as a ZIP or to Google Drive. It also runs in Jupyter. Linked from the README, the home page and the Cookbook, and tested offline against the local test server.
 
 **Documentation**
+- Benchmarks re-measured with 1.1.0 against img2dataset 1.47.0, each figure now the median of three runs (`benchmarks/results-2026-11-10.jsonl`), with the README table and charts updated. On the rate-limited CDN, Machyon finishes at 301 img/s with 33 429s, where 1.0.0 managed 343 img/s with 264: the cost of honouring every `Retry-After` since 1.0.2. The command-line recordings in the docs were re-recorded with 1.1.0.
 - The CLI reference showed only `machyon download`: each command's help was fenced twice, so everything after it rendered as one broken code block. Every command, now including `machyon ui`, has its own section again, and a test keeps it that way.
 
 ## 1.0.2 (2026-11-10)

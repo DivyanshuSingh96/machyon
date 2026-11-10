@@ -3,7 +3,7 @@
 <text x="24" y="38" font-size="20" font-weight="700" fill="#ECF1FF">Images per second, every file verified byte-for-byte</text>
 <text x="24" y="62" font-size="13" fill="#AEB9DD">Higher is better. Same fault-injecting CDN, same machine (2 vCPU), default settings for both tools.</text>
 <rect x="24" y="76" width="12" height="12" rx="3" fill="#ECF1FF"/>
-<text x="42" y="86.5" font-size="13" fill="#AEB9DD">Machyon 1.0</text>
+<text x="42" y="86.5" font-size="13" fill="#AEB9DD">Machyon 1.1</text>
 <rect x="145.2" y="76" width="12" height="12" rx="3" fill="#8EA2FF"/>
 <text x="163.2" y="86.5" font-size="13" fill="#AEB9DD">img2dataset 1.47 (defaults)</text>
 <line x1="190.0" y1="104" x2="190.0" y2="410" stroke="#454F6B" stroke-width="1"/>
@@ -17,29 +17,29 @@
 <line x1="634.4444444444445" y1="104" x2="634.4444444444445" y2="410" stroke="#454F6B" stroke-width="1"/>
 <text x="634.4444444444445" y="428" font-size="11" fill="#AEB9DD" text-anchor="middle">800</text>
 <text x="176" y="129" font-size="14" fill="#ECF1FF" text-anchor="end">Clean network</text>
-<g><title>Clean network - Machyon: 820 img/s, 5000/5000 files correct</title><path d="M190.0 108 H641.5555555555555 A4 4 0 0 1 645.5555555555555 112 V120 A4 4 0 0 1 641.5555555555555 124 H190.0 Z" fill="#ECF1FF"/></g>
-<text x="653.5555555555555" y="121" font-size="12.5" font-weight="700" fill="#ECF1FF">820<tspan dx="8" fill="#AEB9DD"></tspan></text>
-<g><title>Clean network - img2dataset: 537.5 img/s, 5000/5000 files correct</title><path d="M190.0 126 H484.6111111111111 A4 4 0 0 1 488.6111111111111 130 V138 A4 4 0 0 1 484.6111111111111 142 H190.0 Z" fill="#8EA2FF"/></g>
-<text x="496.6111111111111" y="139" font-size="12.5" font-weight="400" fill="#AEB9DD">538<tspan dx="8" fill="#AEB9DD"></tspan></text>
+<g><title>Clean network - Machyon: 840.3 img/s, 5000/5000 files correct</title><path d="M190.0 108 H652.8333333333333 A4 4 0 0 1 656.8333333333333 112 V120 A4 4 0 0 1 652.8333333333333 124 H190.0 Z" fill="#ECF1FF"/></g>
+<text x="664.8333333333333" y="121" font-size="12.5" font-weight="700" fill="#ECF1FF">840<tspan dx="8" fill="#AEB9DD"></tspan></text>
+<g><title>Clean network - img2dataset: 621.3 img/s, 5000/5000 files correct</title><path d="M190.0 126 H531.1666666666667 A4 4 0 0 1 535.1666666666667 130 V138 A4 4 0 0 1 531.1666666666667 142 H190.0 Z" fill="#8EA2FF"/></g>
+<text x="543.1666666666667" y="139" font-size="12.5" font-weight="400" fill="#AEB9DD">621<tspan dx="8" fill="#AEB9DD"></tspan></text>
 <text x="176" y="191" font-size="14" fill="#ECF1FF" text-anchor="end">Real-world faults</text>
-<g><title>Real-world faults - Machyon: 518.6 img/s, 4976/4976 files correct</title><path d="M190.0 170 H474.1111111111111 A4 4 0 0 1 478.1111111111111 174 V182 A4 4 0 0 1 474.1111111111111 186 H190.0 Z" fill="#ECF1FF"/></g>
-<text x="486.1111111111111" y="183" font-size="12.5" font-weight="700" fill="#ECF1FF">519<tspan dx="8" fill="#AEB9DD"></tspan></text>
-<g><title>Real-world faults - img2dataset: 257.1 img/s, 4879/4976 files correct</title><path d="M190.0 188 H328.83333333333337 A4 4 0 0 1 332.83333333333337 192 V200 A4 4 0 0 1 328.83333333333337 204 H190.0 Z" fill="#8EA2FF"/></g>
-<text x="340.83333333333337" y="201" font-size="12.5" font-weight="400" fill="#AEB9DD">257<tspan dx="8" fill="#AEB9DD">· 97 of 4,976 lost · 10 HTML pages saved as images</tspan></text>
+<g><title>Real-world faults - Machyon: 524.4 img/s, 4976/4976 files correct</title><path d="M190.0 170 H477.3333333333333 A4 4 0 0 1 481.3333333333333 174 V182 A4 4 0 0 1 477.3333333333333 186 H190.0 Z" fill="#ECF1FF"/></g>
+<text x="489.3333333333333" y="183" font-size="12.5" font-weight="700" fill="#ECF1FF">524<tspan dx="8" fill="#AEB9DD"></tspan></text>
+<g><title>Real-world faults - img2dataset: 249.5 img/s, 4877/4976 files correct</title><path d="M190.0 188 H324.6111111111111 A4 4 0 0 1 328.6111111111111 192 V200 A4 4 0 0 1 324.6111111111111 204 H190.0 Z" fill="#8EA2FF"/></g>
+<text x="336.6111111111111" y="201" font-size="12.5" font-weight="400" fill="#AEB9DD">250<tspan dx="8" fill="#AEB9DD">· 99 of 4,976 lost · 10 HTML pages saved as images</tspan></text>
 <text x="176" y="253" font-size="14" fill="#ECF1FF" text-anchor="end">Rate-limited CDN</text>
-<g><title>Rate-limited CDN - Machyon: 343.3 img/s, 3000/3000 files correct</title><path d="M190.0 232 H376.72222222222223 A4 4 0 0 1 380.72222222222223 236 V244 A4 4 0 0 1 376.72222222222223 248 H190.0 Z" fill="#ECF1FF"/></g>
-<text x="388.72222222222223" y="245" font-size="12.5" font-weight="700" fill="#ECF1FF">343<tspan dx="8" fill="#AEB9DD"></tspan></text>
-<g><title>Rate-limited CDN - img2dataset: 0.6 img/s, 3/3000 files correct</title><path d="M190.0 250 H190.0 A2 2 0 0 1 192.0 252 V264 A2 2 0 0 1 190.0 266 H190.0 Z" fill="#8EA2FF"/></g>
-<text x="198.33333333333334" y="263" font-size="12.5" font-weight="400" fill="#AEB9DD">0.6<tspan dx="8" fill="#AEB9DD">· 2,997 of 3,000 lost</tspan></text>
+<g><title>Rate-limited CDN - Machyon: 301.1 img/s, 3000/3000 files correct</title><path d="M190.0 232 H353.27777777777777 A4 4 0 0 1 357.27777777777777 236 V244 A4 4 0 0 1 353.27777777777777 248 H190.0 Z" fill="#ECF1FF"/></g>
+<text x="365.27777777777777" y="245" font-size="12.5" font-weight="700" fill="#ECF1FF">301<tspan dx="8" fill="#AEB9DD"></tspan></text>
+<g><title>Rate-limited CDN - img2dataset: 1.2 img/s, 5/3000 files correct</title><path d="M190.0 250 H190.0 A2 2 0 0 1 192.0 252 V264 A2 2 0 0 1 190.0 266 H190.0 Z" fill="#8EA2FF"/></g>
+<text x="198.66666666666666" y="263" font-size="12.5" font-weight="400" fill="#AEB9DD">1.2<tspan dx="8" fill="#AEB9DD">· 2,995 of 3,000 lost</tspan></text>
 <text x="176" y="315" font-size="14" fill="#ECF1FF" text-anchor="end">Slow link (2.3 MB/s)</text>
 <g><title>Slow link (2.3 MB/s) - Machyon: 114.2 img/s, 2000/2000 files correct</title><path d="M190.0 294 H249.44444444444446 A4 4 0 0 1 253.44444444444446 298 V306 A4 4 0 0 1 249.44444444444446 310 H190.0 Z" fill="#ECF1FF"/></g>
 <text x="261.44444444444446" y="307" font-size="12.5" font-weight="700" fill="#ECF1FF">114<tspan dx="8" fill="#AEB9DD"></tspan></text>
-<g><title>Slow link (2.3 MB/s) - img2dataset: 94.9 img/s, 2000/2000 files correct</title><path d="M190.0 312 H238.72222222222223 A4 4 0 0 1 242.72222222222223 316 V324 A4 4 0 0 1 238.72222222222223 328 H190.0 Z" fill="#8EA2FF"/></g>
-<text x="250.72222222222223" y="325" font-size="12.5" font-weight="400" fill="#AEB9DD">95<tspan dx="8" fill="#AEB9DD"></tspan></text>
+<g><title>Slow link (2.3 MB/s) - img2dataset: 97.9 img/s, 2000/2000 files correct</title><path d="M190.0 312 H240.38888888888889 A4 4 0 0 1 244.38888888888889 316 V324 A4 4 0 0 1 240.38888888888889 328 H190.0 Z" fill="#8EA2FF"/></g>
+<text x="252.38888888888889" y="325" font-size="12.5" font-weight="400" fill="#AEB9DD">98<tspan dx="8" fill="#AEB9DD"></tspan></text>
 <text x="176" y="377" font-size="14" fill="#ECF1FF" text-anchor="end">High latency (350 ms)</text>
-<g><title>High latency (350 ms) - Machyon: 218.6 img/s, 3000/3000 files correct</title><path d="M190.0 356 H307.44444444444446 A4 4 0 0 1 311.44444444444446 360 V368 A4 4 0 0 1 307.44444444444446 372 H190.0 Z" fill="#ECF1FF"/></g>
-<text x="319.44444444444446" y="369" font-size="12.5" font-weight="700" fill="#ECF1FF">219<tspan dx="8" fill="#AEB9DD"></tspan></text>
-<g><title>High latency (350 ms) - img2dataset: 213.6 img/s, 3000/3000 files correct</title><path d="M190.0 374 H304.6666666666667 A4 4 0 0 1 308.6666666666667 378 V386 A4 4 0 0 1 304.6666666666667 390 H190.0 Z" fill="#8EA2FF"/></g>
-<text x="316.6666666666667" y="387" font-size="12.5" font-weight="400" fill="#AEB9DD">214<tspan dx="8" fill="#AEB9DD"></tspan></text>
-<text x="24" y="450" font-size="11.5" fill="#AEB9DD">img2dataset hand-tuned to 24 in flight reaches 222 img/s on the rate-limited CDN; Machyon finds its limit itself. Reproduce: python benchmarks/harness.py</text>
+<g><title>High latency (350 ms) - Machyon: 242.7 img/s, 3000/3000 files correct</title><path d="M190.0 356 H320.83333333333337 A4 4 0 0 1 324.83333333333337 360 V368 A4 4 0 0 1 320.83333333333337 372 H190.0 Z" fill="#ECF1FF"/></g>
+<text x="332.83333333333337" y="369" font-size="12.5" font-weight="700" fill="#ECF1FF">243<tspan dx="8" fill="#AEB9DD"></tspan></text>
+<g><title>High latency (350 ms) - img2dataset: 231.5 img/s, 3000/3000 files correct</title><path d="M190.0 374 H314.6111111111111 A4 4 0 0 1 318.6111111111111 378 V386 A4 4 0 0 1 314.6111111111111 390 H190.0 Z" fill="#8EA2FF"/></g>
+<text x="326.6111111111111" y="387" font-size="12.5" font-weight="400" fill="#AEB9DD">232<tspan dx="8" fill="#AEB9DD"></tspan></text>
+<text x="24" y="450" font-size="11.5" fill="#AEB9DD">img2dataset hand-tuned to 24 in flight reaches 224 img/s on the rate-limited CDN; Machyon finds its limit itself. Reproduce: python benchmarks/harness.py</text>
 </svg>

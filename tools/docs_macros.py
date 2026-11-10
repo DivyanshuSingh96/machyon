@@ -45,7 +45,7 @@ EXTRA_DOCS = {
     "user_agent": "The ``User-Agent`` header. Default: one current, stable desktop browser identity.",
     "progress": "Show the progress bar.",
 }
-BENCH = "benchmarks/results-2026-11-07.jsonl"
+BENCH = "benchmarks/results-2026-11-10.jsonl"
 SCENARIO_NAMES = {"clean": "Clean network, 80 ms RTT", "realistic": "Real-world faults",
                   "ratelimited": "Rate-limited CDN (max 48 in flight)", "bandwidth": "Slow link, 2.3 MB/s",
                   "highlatency": "High latency, 350 ms"}
