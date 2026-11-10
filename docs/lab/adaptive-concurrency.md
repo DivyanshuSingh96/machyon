@@ -1,4 +1,6 @@
 ---
+hide:
+  - toc
 description: A real experiment, replayed in your browser - how many requests should a downloader send at once, and what Machyon actually did when a server said "too many".
 ---
 
@@ -42,8 +44,8 @@ away. It judges its speed in one-second windows, so the drop comes a second or t
 ## 3. Watch the real run
 
 <span class="mx-lab-tag mx-lab-tag-real">Recorded</span> Every request the server received, replayed at the time
-it happened. The grid is the server: each square is a request in flight, and squares past the first 24 are over
-its limit. Pick a run, press play, and drag the timeline to look closer.
+it happened. The panel on the right is the server: each lit slot is a request in flight, and requests past the
+first 24 land over its limit. Pick a run, press play, and drag the timeline to look closer.
 
 <div class="mx-lab-replay" data-lab-replay data-recording="../../assets/lab/recordings/adaptive-concurrency.json">
 <noscript>The replay needs JavaScript. The recording itself is plain JSON:

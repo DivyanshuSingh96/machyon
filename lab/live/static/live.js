@@ -6,7 +6,8 @@
   const token = document.querySelector('meta[name="lab-token"]').content;
   const $ = (id) => document.getElementById(id);
   const form = $("settings"), note = $("note"), go = $("go");
-  let grid = null, poll = 0, after = 0, runIndex = -1, points = [], ok = 0, throttled = 0, ceiling = null, lastUrl = null;
+  let stage = null, inst = null, poll = 0, after = 0, runIndex = -1, points = [], ok = 0, throttled = 0, ceiling = null, lastUrl = null;
+  let open = new Map(), freeSlots = [], freeDoor = [], nextSlot = 0, nextDoor = 0, rtt = 100, recent = [];
 
   async function api(path, body) {
     const res = await fetch(path, {
@@ -50,6 +51,7 @@
 
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    rtt = val("rtt_ms") || 100;
     const settings = { images: val("images"), ceiling: val("ceiling"), rtt_ms: val("rtt_ms"),
       p503_percent: val("p503_percent"), runs: runs() };
     note.classList.remove("error");
@@ -68,14 +70,37 @@
   });
 
   // ---------------------------------------------------------------- while it runs
+  function clearTracking() {
+    after = 0; points = []; ok = 0; throttled = 0; recent = [];
+    open = new Map(); freeSlots = []; freeDoor = []; nextSlot = 0; nextDoor = 0;
+  }
   function resetRun(status) {
-    runIndex = status.run_index; after = 0; points = []; ok = 0; throttled = 0;
+    runIndex = status.run_index; clearTracking();
     ceiling = status.server_ceiling;
-    const slot = $("now-grid");
-    if (grid) grid.svg.remove();
-    grid = window.MachyonLab.serverGrid(Math.max(8, Math.ceil(Math.max(ceiling || 0, 48) / 8) * 8), ceiling || 1e9);
-    slot.prepend(grid.svg);
+    // the same stage and instruments as the recorded replay; the door holds up to twice the limit
+    const slots = ceiling || 48, door = ceiling ? Math.min(64, ceiling) : 0;
+    stage = window.MachyonLab.createStage({ slots, door, limitLabel: ceiling ? `limit ${ceiling}` : null });
+    inst = window.MachyonLab.createInstruments({ cap: ceiling, scaleMax: (ceiling || 24) * 2, total: val("images") });
+    $("now-stage").replaceChildren(stage.el, inst.el);
     $("now-run").textContent = `Run ${status.run_index + 1} of ${status.runs}: ${status.run_label}`;
+  }
+
+  // each request gets a place on the stage as it arrives, by the server's own rule: over the limit when the server
+  // counted more than `ceiling` in flight (it answers those with 429)
+  const take = (pool) => pool.sort((a, b) => b - a).pop();
+  function track(e, delay) {
+    if (e.event === "start") {
+      const over = Boolean(ceiling) && e.inflight > ceiling;
+      const place = over ? (freeDoor.length ? take(freeDoor) : nextDoor++) : (freeSlots.length ? take(freeSlots) : nextSlot++);
+      open.set(e.id, { s: e.t_ms, over, place });
+      stage.spawn(over ? "reqOver" : "req", place, delay);
+    } else {
+      const r = open.get(e.id);
+      if (!r) return;
+      open.delete(e.id);
+      (r.over ? freeDoor : freeSlots).push(r.place);
+      stage.spawn(r.over ? "turned" : e.status === 429 ? "turnedSlot" : e.status === 200 ? "img" : "err", r.place, delay);
+    }
   }
 
   async function tick() {
@@ -85,11 +110,13 @@
       if (status.run_index >= 0) {
         const page = await api(`/api/runs/current/events?after=${after}`);
         if (page.run_index === runIndex) {
-          if (page.latest && page.latest < after) { after = 0; points = []; ok = 0; throttled = 0; }  // server reset
+          if (page.latest && page.latest < after) clearTracking();  // server reset
+          const first = page.events.length ? page.events[0].t_ms : 0;
           for (const e of page.events) {
             points.push([e.t_ms, e.inflight]);
             if (e.event === "end" && e.status === 200 && e.outcome === "complete") ok += 1;
-            if (e.event === "end" && e.status === 429) throttled += 1;
+            if (e.event === "end" && e.status === 429) { throttled += 1; recent.push(e.t_ms); }
+            track(e, Math.min(300, e.t_ms - first));   // spread this batch's dots over the time it covered
           }
           after = page.next;
           draw();
@@ -108,31 +135,32 @@
   }
 
   function draw() {
-    const n = points.length ? points[points.length - 1][1] : 0;
-    grid.set(n);
-    const over = ceiling && n > ceiling;
-    $("now-inflight").classList.toggle("over", Boolean(over));
-    $("now-inflight").querySelector("b").textContent = n.toLocaleString("en");
-    $("now-delivered").textContent = ok.toLocaleString("en");
-    $("now-429").querySelector("b").textContent = throttled.toLocaleString("en");
-    $("now-429").classList.toggle("over", throttled > 0);
+    const n = points.length ? points[points.length - 1][1] : 0, tNow = points.length ? points[points.length - 1][0] : 0;
+    recent = recent.filter((t) => t > tNow - 500);
+    inst.set({ inflight: n, delivered: ok, throttled, recent: recent.length });
+    const busy = [];
+    let overs = 0;
+    for (const r of open.values()) {
+      if (r.over) overs++;
+      else busy.push({ slot: r.place, p: Math.min(0.95, (tNow - r.s) / rtt), kind: "ok" });
+    }
+    stage.set(busy, overs, `${(tNow / 1000).toFixed(1)} s`);
     const canvas = $("now-chart"), dpr = window.devicePixelRatio || 1, w = canvas.clientWidth || 600, h = 200;
     canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.height = `${h}px`;
     const ctx = canvas.getContext("2d"), cs = getComputedStyle(document.body);
     const c = (name) => cs.getPropertyValue(name).trim();
-    const dark = document.body.getAttribute("data-md-color-scheme") === "slate";
     ctx.scale(dpr, dpr);
     const tMax = Math.max(5000, points.length ? points[points.length - 1][0] : 0);
     const yMax = Math.max(8, ceiling || 0, ...points.map((p) => p[1])) * 1.15;
     const x = (t) => 36 + t / tMax * (w - 48), y = (v) => 10 + (1 - v / yMax) * (h - 34);
     ctx.font = `11px ${c("--md-text-font-family") || "sans-serif"}`;
-    ctx.fillStyle = c("--mx-muted");
+    ctx.fillStyle = c("--lab-muted");
     ctx.fillText(`${Math.round(tMax / 1000)} s`, w - 30, h - 6);
     ctx.fillText("0", 6, y(0) + 4);
     if (ceiling) {
-      ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = c("--mx-lab-over");
+      ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = c("--lab-over");
       ctx.beginPath(); ctx.moveTo(36, y(ceiling)); ctx.lineTo(w - 12, y(ceiling)); ctx.stroke(); ctx.restore();
-      ctx.fillStyle = c("--mx-lab-over"); ctx.fillText(`limit ${ceiling}`, 6, y(ceiling) + 4);
+      ctx.fillStyle = c("--lab-over"); ctx.fillText(`limit ${ceiling}`, 6, y(ceiling) + 4);
     }
     // the most in flight per 100 ms, drawn as steps: the same reading as the recorded chart
     const BIN = 100, peak = new Map(), endOf = new Map();
@@ -141,7 +169,7 @@
       peak.set(k, Math.max(peak.has(k) ? peak.get(k) : 0, v));
       endOf.set(k, v);
     }
-    ctx.strokeStyle = dark ? c("--mx-accent") : c("--mx-accent-ink"); ctx.lineWidth = 1.8; ctx.lineJoin = "round";
+    ctx.strokeStyle = c("--lab-signal"); ctx.lineWidth = 2; ctx.lineJoin = "round";
     ctx.beginPath();
     const lastK = points.length ? Math.floor(points[points.length - 1][0] / BIN) : -1;
     let carry = 0;   // in flight when the previous bin ended; a bin's peak includes what it started with
