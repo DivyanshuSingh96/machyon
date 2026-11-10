@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+**Documentation**
+- The text column is centred whenever no sidebar sits beside it. Between about 800 and 1,220 px wide, pages hugged the left edge and left an empty strip on the right where the contents would go; the breadcrumb follows the column.
+- On phones and small windows, code blocks keep the same side margins as the text instead of running edge to edge, with their rounded corners.
+- Nothing pushes a page sideways on narrow phones any more: card grids shrink to the screen (the Cookbook, the Lab and the home page at 320 px), the simulator's controls wrap and its decision table scrolls inside its card, and the header fits at 280 px.
+- Tables too wide for the screen become cards: one per row, each value under its column's heading, instead of being cut off at the edge. A table that fits keeps its columns, and it is decided again whenever the window changes size. The Lab's run comparison does the same.
+- "On this page": the section you click stays highlighted even near the end of a page, where the theme used to highlight the last section instead, and every entry now shows a clear hover.
+
 ## 1.1.0 (2026-11-10)
 
 **Added**

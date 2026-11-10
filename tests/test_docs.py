@@ -252,3 +252,16 @@ def test_cli_reference_covers_every_command_once_fenced():
     text = (ROOT / "docs" / "reference" / "cli.md").read_text(encoding="utf-8")
     assert not re.search(r"```[a-z]*\s*\n\{\{ cli_help", text)
     assert set(re.findall(r'cli_help\("([a-z]+)"\)', text)) == set(COMMANDS)
+
+
+def test_grid_columns_never_demand_more_than_the_screen():
+    # minmax(15rem, 1fr) needs 15rem even on a 320 px phone and pushes the page sideways; min(15rem, 100%) can't.
+    css = (ROOT / "docs" / "assets" / "css" / "machyon.css").read_text(encoding="utf-8")
+    assert not re.findall(r"minmax\(\s*[0-9.]+(?:rem|em|px)", css)
+
+
+def test_every_script_the_site_loads_exists():
+    config = (ROOT / "zensical.toml").read_text(encoding="utf-8")
+    scripts = re.findall(r'"(assets/js/[^"]+\.js)"', config)
+    assert {"assets/js/toc-pin.js", "assets/js/tables.js"} <= set(scripts)
+    assert all((ROOT / "docs" / s).is_file() for s in scripts)
