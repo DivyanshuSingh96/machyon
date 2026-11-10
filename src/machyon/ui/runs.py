@@ -145,7 +145,7 @@ class RunStore:
                 logger.warning(f"Skipping {e.name}: {why}")
                 continue
             runs.append(data)
-        runs.sort(key=lambda r: r["id"], reverse=True)   # ids start with the creation time
+        runs.sort(key=lambda r: (r["id"][:21], r.get("created_ts", 0)), reverse=True)   # newest first
         return runs
 
     # ------------------------------------------------------------------ writing
@@ -173,7 +173,8 @@ class RunStore:
         (d / "source").mkdir()
         rel = f"source/manifest{staged.suffix.lower()}"
         os.replace(staged, d / rel)   # same filesystem: staging lives in the root
-        run = {"schema": SCHEMA, "id": run_id, "created": now_iso(), "updated": now_iso(), "status": "running",
+        run = {"schema": SCHEMA, "id": run_id, "created": now_iso(), "created_ts": time.time(), "updated": now_iso(),
+               "status": "running",
                "source": {**source, "file": rel}, "names": names, "settings": settings,
                "progress": None, "error": None, "history": []}
         self.save(run)

@@ -45,6 +45,10 @@ const ICONS = {
   sun: "M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z",
   moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
   folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+  play: "M7 5v14l11-7z",
+  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+  download: "M12 4v12m0 0-4-4m4 4 4-4M4 20h16",
+  image: "M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9h.01",
 };
 function icon(name) {
   const s = document.createElementNS(SVG, "svg");
@@ -106,6 +110,21 @@ async function copy(text, what) {
     ta.remove();
   }
   toast(`${what} copied`);
+}
+
+// A modal question. <dialog> keeps focus inside it and Escape cancels; the page behind stays inert.
+function ask({ title, text, ok, danger, extra }) {
+  return new Promise((resolve) => {
+    const okBtn = h("button", { class: `btn ${danger ? "danger" : "primary"}`, type: "submit", value: "ok", text: ok });
+    const dlg = h("dialog", { class: "dlg", "aria-labelledby": "dlg-t" },
+      h("form", { method: "dialog", class: "stack" },
+        h("h2", { id: "dlg-t", text: title }), text && h("p", { class: "muted", text }), extra,
+        h("div", { class: "toolbar end" }, h("button", { class: "btn", type: "submit", value: "cancel", text: "Cancel" }), okBtn)));
+    dlg.addEventListener("close", () => { dlg.remove(); resolve(dlg.returnValue === "ok"); });
+    document.body.append(dlg);
+    dlg.showModal();
+    (dlg.querySelector("input") || (danger ? dlg.querySelector('[value="cancel"]') : okBtn)).focus();
+  });
 }
 
 // ------------------------------------------------------------------ session and API
@@ -178,10 +197,16 @@ function locked() {
 const ROUTES = [
   [/^#\/?$/, home, "home"],
   [/^#\/new$/, newDownload, "new"],
-  [/^#\/run\/(run_[0-9_-]+_[0-9a-f]{4})$/, runPage, null],
+  [/^#\/history$/, historyPage, "history"],
+  [/^#\/run\/(run_[0-9_-]+_[0-9a-f]{4})$/, runPage, "history"],
 ];
 
-function stopPolling() { clearTimeout(pollTimer); pollTimer = null; }
+const blobs = [];   // thumbnail object URLs of the current page, released when it changes
+function stopPolling() {
+  clearTimeout(pollTimer);
+  pollTimer = null;
+  while (blobs.length) URL.revokeObjectURL(blobs.pop());
+}
 
 async function route() {
   stopPolling();
@@ -561,21 +586,71 @@ async function runPage(id) {
   const job = (await api("/api/job")).job;
   const live = job && job.run_id === id && job.state === "running" ? job : null;
   setLive(job);
+  const busy = !!(job && job.state === "running");
+  const resumable = ["interrupted", "cancelled", "error"].includes(r.status);
+  const files = live ? null : await api(`/api/runs/${id}/files${resumable ? "?count=1" : ""}`);
 
+  const actions = h("div", { class: "toolbar" },
+    live ? h("span", { class: "tag run", text: live.kind === "retry" ? "Retrying" : "Downloading" }) : statusTag(r.status, r.report),
+    !live && resumable && h("button", { class: "btn primary small", type: "button", disabled: busy, onclick: () => resume(r) }, icon("play"), "Resume"),
+    !live && r.report && h("button", { class: "btn small", type: "button", onclick: () => saveReport(r) }, icon("download"), "Report"),
+    !live && h("button", { class: "btn small ghost", type: "button", onclick: () => remove(r) }, icon("trash"), "Delete"));
   const head = h("div", { class: "run-head" },
     h("div", { class: "grow" }, h("p", { class: "faint", text: `${when(r.created)} · ${r.id}` }), h("h1", { text: sourceName(r) })),
-    h("div", { class: "toolbar" }, live ? h("span", { class: "tag run", text: live.kind === "retry" ? "Retrying" : "Downloading" }) : statusTag(r.status, r.report)));
+    actions);
   const view = h("div", { class: "stack" }, head);
+  if (busy && !live) view.append(h("div", { class: "note" }, icon("info"), h("div", null,
+    "Another download is running, so this run can't be resumed or retried until it ends. ",
+    h("a", { href: `#/run/${job.run_id}`, text: "Watch it" }))));
 
-  if (live) {
-    view.append(liveCard(id, live));
-  } else if (r.report) {
-    view.append(reportCard(r.report));
-  } else {
-    view.append(stoppedCard(r));
+  if (live) view.append(liveCard(id, live));
+  else if (r.report) view.append(reportCard(r.report, data.history));
+  else view.append(stoppedCard(r, files));
+  if (files) {
+    if (files.images.length) view.append(galleryCard(r, files));
+    if (files.failures.total) view.append(failuresCard(r, files.failures, busy));
   }
-  view.append(folderCard(data));
+  view.append(folderCard(r, data));
   return view;
+}
+
+async function resume(r) {
+  const ok = await ask({ title: "Resume this run?", ok: "Resume",
+    text: "Machyon downloads the rest with the same manifest, file names and settings, into the same folder. " +
+          "Files already on disk are kept and skipped." });
+  if (!ok) return;
+  try { await api(`/api/runs/${r.id}/resume`, { method: "POST", json: {} }); say("Resumed"); route(); } catch (e) { toast(e.message); }
+}
+
+async function saveReport(r) {
+  try {
+    const rep = await api(`/api/runs/${r.id}/report`);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(rep, null, 2)], { type: "application/json" }));
+    const a = h("a", { href: url, download: `${r.id}-report.json` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) { toast(e.message); }
+}
+
+async function remove(r) {
+  const input = h("input", { type: "text", autocomplete: "off", spellcheck: false, "aria-label": "Type delete to confirm" });
+  const ok = await ask({ title: "Delete this run?", ok: "Delete for good", danger: true,
+    text: `This removes its folder from your computer: every downloaded image, the manifest copy and the report. It can't be undone.`,
+    extra: h("label", { class: "field" }, h("span", null, "Type ", h("code", { text: "delete" }), " to confirm"), input) });
+  if (!ok) return;
+  if (input.value.trim().toLowerCase() !== "delete") { toast("Not deleted: type delete to confirm."); return; }
+  try {
+    await api(`/api/runs/${r.id}`, { method: "DELETE", json: { confirm: r.id } });
+    toast("Run deleted");
+    location.hash = "#/history";
+  } catch (e) { toast(e.message); }
+}
+
+async function openFolder(r, what) {
+  try { await api(`/api/runs/${r.id}/open`, { method: "POST", json: { what } }); toast("Opened in your file manager"); }
+  catch (e) { toast(e.message); }
 }
 
 function liveCard(id, job) {
@@ -601,7 +676,8 @@ function liveCard(id, job) {
   let lastPhase = null;
 
   async function stop() {
-    if (!confirm("Stop this download? Every file already on disk stays complete, and you can resume later.")) return;
+    if (!await ask({ title: "Stop this download?", ok: "Stop", danger: true,
+      text: "Every file already on disk stays complete. Rows that didn't finish are recorded as interrupted, and you can resume the run later." })) return;
     stopBtn.disabled = true;
     try { await api("/api/job/stop", { method: "POST", json: {} }); toast("Stopping…"); } catch (e) { toast(e.message); }
   }
@@ -669,7 +745,7 @@ function stat(k, v, cls, unit) {
   return h("div", { class: `stat ${cls || ""}` }, h("div", { class: "k", text: k }), h("div", { class: "v" }, v, unit && h("small", { text: ` ${unit}` })));
 }
 
-function reportCard(rep) {
+function reportCard(rep, history) {
   const mbs = rep.duration ? rep.bytes / 1048576 / rep.duration : 0;
   const rate = rep.duration ? rep.downloaded / rep.duration : 0;
   const reasons = Object.entries(rep.failure_reasons || {}).sort((a, b) => b[1] - a[1]);
@@ -688,26 +764,140 @@ function reportCard(rep) {
         return h("li", null, h("div", { class: "rh" }, h("code", { text: reason }), h("span", { class: "tag bad", text: plural(n, "row") })),
           ex.hint && h("p", { text: ex.hint }), ex.error && h("p", { class: "mono", text: ex.error }));
       })))
-      : h("div", { class: "note" }, icon("shield"), h("div", { text: "Nothing failed: every row is a real image on disk." })));
+      : h("div", { class: "note" }, icon("shield"), h("div", { text: "Nothing failed: every row is a real image on disk." })),
+    laterRetries(history));
 }
 
-function stoppedCard(r) {
+function laterRetries(history) {
+  const retries = (history || []).filter((e) => e.kind === "retry" && e.report);
+  if (!retries.length) return null;
+  return h("div", { class: "stack" }, h("h3", { text: "Retried since" }), h("ul", { class: "reasons" }, retries.map((e) =>
+    h("li", null, h("div", { class: "rh" }, h("b", { text: when(new Date(e.started * 1000).toISOString()) }),
+      h("span", { class: "tag ok", text: `${int(e.report.downloaded)} recovered` }),
+      e.report.failed ? h("span", { class: "tag bad", text: `${int(e.report.failed)} still failing` }) : null)))));
+}
+
+function stoppedCard(r, files) {
   const p = r.progress;
   const msg = r.status === "error" ? r.error || "The download stopped with an error."
     : r.status === "cancelled" ? "You stopped this download. Every file on disk is complete."
-    : "This download didn't finish (Machyon UI was stopped while it ran). Every file on disk is complete.";
-  return h("section", { class: "card" }, h("h2", { text: r.status === "error" ? "The download stopped" : "Not finished" }),
-    h("div", { class: `note ${r.status === "error" ? "bad" : "warn"}` }, icon("warn"), h("div", { text: msg })),
-    p && h("div", { class: "stats" }, stat("Downloaded", int(p.downloaded), "ok"), stat("Already on disk", int(p.skipped)),
-      stat("Failed", int(p.failed), p.failed ? "bad" : ""), stat("Rows", p.total === null ? "unknown" : int(p.total)), stat("Elapsed", duration(p.elapsed))));
+    : "This download didn't finish: Machyon UI stopped while it ran. Every file on disk is complete.";
+  return h("section", { class: "card" }, h("h2", { text: r.status === "error" ? "The download stopped" : "Not finished yet" }),
+    h("div", { class: `note ${r.status === "error" ? "bad" : "warn"}` }, icon("warn"), h("div", null, msg,
+      " Resume to download the rest: files already on disk are skipped.")),
+    h("h3", { text: "On disk now" }),
+    h("div", { class: "stats" },
+      stat("Images in the folder", files && files.on_disk !== null ? int(files.on_disk) : "–", "ok"),
+      stat("Recorded failures", files ? int(files.failures.total) : "–", files && files.failures.total ? "bad" : ""),
+      p && stat("Rows in the manifest", p.total === null ? "unknown" : int(p.total))),
+    p && p.elapsed >= 1 && h("p", { class: "faint", text: `Last saved progress, ${duration(p.elapsed)} in: ${int(p.downloaded)} downloaded, ` +
+      `${int(p.skipped)} already on disk, ${int(p.failed)} failed.` }));
 }
 
-function folderCard(data) {
+function galleryCard(r, files) {
+  const grid = h("ul", { class: "gallery" });
+  const viewer = (src, path) => ask({ title: path, ok: "Close", extra: h("img", { class: "full", src, alt: path }) });
+  const tiles = files.images.map((im) => {
+    const img = h("img", { alt: im.path, loading: "lazy", decoding: "async" });
+    img.addEventListener("error", () => { if (img.src) { btn.classList.add("broken"); btn.disabled = true; } });
+    const btn = h("button", { type: "button", class: "tile", title: im.path, "aria-label": `View ${im.path}`, disabled: true,
+      onclick: () => viewer(img.src, im.path) }, img, h("span", { text: im.path }));
+    grid.append(h("li", null, btn));
+    return { im, img, btn };
+  });
+  (async () => {   // with the token in a header, four at a time; shown as local blob: URLs
+    const queue = [...tiles];
+    const worker = async () => {
+      for (let t = queue.shift(); t; t = queue.shift()) {
+        try {
+          const res = await fetch(`/api/runs/${r.id}/image?path=${encodeURIComponent(t.im.path)}`,
+            { headers: { "X-Machyon-Token": token }, cache: "no-store" });
+          if (!res.ok) throw new Error(String(res.status));
+          const url = URL.createObjectURL(await res.blob());
+          blobs.push(url);
+          t.img.src = url;
+          t.btn.disabled = false;
+        } catch { t.btn.classList.add("broken"); }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  })();
+  return h("section", { class: "card" },
+    h("div", { class: "card-head" }, h("h2", { class: "grow", text: "Gallery" }),
+      h("span", { class: "faint", text: files.more ? `${files.images.length} of the images, picked across the folder` : plural(files.images.length, "image") })),
+    grid);
+}
+
+const KIND = {
+  retryable: ["may recover", "warn"], permanent: ["permanent", "bad"], row: ["fix the manifest", "bad"],
+};
+
+function failuresCard(r, f, busy) {
+  const include = h("input", { type: "checkbox" });
+  const retryBtn = h("button", { class: "btn primary small", type: "button", disabled: busy || !(f.retryable || f.permanent), onclick: retry },
+    icon("retry"), "Retry failures");
+  async function retry() {
+    const withPermanent = include.checked && f.permanent > 0;
+    if (withPermanent) {
+      const ok = await ask({ title: `Also retry ${plural(f.permanent, "permanent failure")}?`, ok: "Retry them too", danger: true,
+        text: "These failed in a way a retry normally can't fix (a 404, a page that isn't an image…). Machyon will ask the servers again anyway." });
+      if (!ok) return;
+    } else if (!f.retryable) { toast("Only permanent failures are left: tick the box to retry them anyway."); return; }
+    try {
+      await api(`/api/runs/${r.id}/retry`, { method: "POST", json: { include_permanent: withPermanent, confirm: withPermanent } });
+      say("Retrying");
+      route();
+    } catch (e) { toast(e.message); }
+  }
+  return h("section", { class: "card" },
+    h("div", { class: "card-head" }, h("h2", { class: "grow", text: "Failures" }), retryBtn),
+    h("p", { class: "muted", text: `${plural(f.total, "row")} recorded in failed_downloads.jsonl: ${int(f.retryable)} may recover with a retry, ` +
+      `${int(f.permanent)} ${f.permanent === 1 ? "is" : "are"} permanent` + (f.row ? `, ${int(f.row)} need a fix in the manifest.` : ".") }),
+    f.permanent > 0 && h("label", { class: "switch" }, include, h("span", null, "Include permanent failures",
+      h("span", { class: "hint", text: "You'll be asked to confirm." }))),
+    h("div", { class: "table-wrap" }, h("table", null,
+      h("thead", null, h("tr", null, h("th", { text: "Reason" }), h("th", { text: "File" }), h("th", { text: "Link" }), h("th", { text: "Details" }))),
+      h("tbody", null, f.rows.map((x) => h("tr", null,
+        h("td", null, h("code", { text: x.reason }), " ", h("span", { class: `tag ${KIND[x.kind][1]}`, text: KIND[x.kind][0] })),
+        h("td", { class: "mono", text: x.names.join(", "), title: x.names.join(", ") }),
+        h("td", { text: x.url, title: x.url }),
+        h("td", { text: x.hint || x.error || "", title: [x.error, x.hint].filter(Boolean).join(" · ") })))))),
+    f.total > f.rows.length && h("p", { class: "faint", text: `Showing ${int(f.rows.length)} of ${int(f.total)}; the rest are in the ledger file.` }),
+    h("p", { class: "faint", text: "Links are shown without passwords or query values, which can hold secrets." }));
+}
+
+function folderCard(r, data) {
   return h("section", { class: "card" }, h("h2", { text: "Files" }),
-    h("p", { class: "where" }, "Images are in", h("span", { class: "path", text: data.images }),
-      h("button", { class: "btn small ghost", type: "button", onclick: () => copy(data.images, "Folder path") }, icon("copy"), "Copy path")),
+    h("p", { class: "where" }, "Images are in", h("span", { class: "path", text: data.images })),
+    h("div", { class: "toolbar" },
+      h("button", { class: "btn small", type: "button", onclick: () => openFolder(r, "images") }, icon("folder"), "Open folder"),
+      h("button", { class: "btn small", type: "button", onclick: () => copy(data.images, "Folder path") }, icon("copy"), "Copy path")),
     h("p", { class: "faint" }, "The run's folder also keeps the original manifest, ", h("code", { text: "run.json" }), " and ",
       h("code", { text: "report.json" }), "; failures are listed in ", h("code", { text: "images/failed_downloads.jsonl" }), "."));
+}
+
+// ------------------------------------------------------------------ history
+
+async function historyPage() {
+  const { runs } = await api("/api/runs");
+  const needs = (r) => ["interrupted", "cancelled", "error"].includes(r.status) || (r.report && r.report.failed > 0);
+  let filter = "all";
+  const list = h("ul", { class: "runs" });
+  const tabs = [["all", "All"], ["attention", "Needs attention"], ["completed", "Completed"]].map(([key, label]) =>
+    h("button", { type: "button", "aria-pressed": String(key === filter), text: label, onclick: () => { filter = key; draw(); } }));
+  function draw() {
+    tabs.forEach((b, i) => b.setAttribute("aria-pressed", String(["all", "attention", "completed"][i] === filter)));
+    const shown = runs.filter((r) => filter === "all" || (filter === "attention" ? needs(r) : r.status === "completed" && !needs(r)));
+    list.replaceChildren(...shown.map((r) => h("li", null, runRow(r))));
+    if (!shown.length) list.append(h("li", { class: "empty" }, h("span", { text: runs.length ? "Nothing here." : "No runs yet." })));
+  }
+  draw();
+  return h("div", { class: "stack" },
+    h("div", { class: "run-head" }, h("div", { class: "grow" }, h("h1", { text: "History" }),
+      h("p", { class: "muted", text: `${plural(runs.length, "run")} in ${(state && state.root) || "your output folder"}. Each one is a folder you can open, keep or delete.` })),
+      h("a", { class: "btn primary", href: "#/new" }, icon("plus"), "New download")),
+    h("div", { class: "seg", role: "group", "aria-label": "Show" }, tabs),
+    h("section", { class: "card" }, list));
 }
 
 // ------------------------------------------------------------------ start
