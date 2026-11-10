@@ -3,6 +3,8 @@
 ## Unreleased (1.1.0)
 
 **Added**
+- `on_progress=` for `Downloader()`, `download()` and `adownload()`: a function that receives an immutable `ProgressSnapshot` about twice a second while a call runs, and exactly one final snapshot however the call ends (completed, cancelled or with an error). The final snapshot's counts equal the call's `Report`. A source of unknown length reports `total=None` rather than an invented percentage. An exception raised by the callback is logged once and never stops the download; without a callback, nothing is sampled.
+- `machyon.sources.inspect(path, url_col=None, limit=20)`: preview a manifest the way `download()` reads it, returning a `SourceInspection` with the format, columns, the URL column (and whether it was guessed), the first rows and URLs, and a structured error instead of an exception for missing, empty, malformed or unreadable files, missing Parquet support, and unknown or unguessable URL columns.
 - A Google Colab notebook, [`notebooks/machyon-colab.ipynb`](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb): paste links or upload a CSV, choose the URL column, filename template and speed in a form, then see the report, a gallery of up to 24 images and every failure with its reason, retry the failures, and take the images as a ZIP or to Google Drive. It also runs in Jupyter. Linked from the README, the home page and the Cookbook, and tested offline against the local test server.
 
 ## 1.0.2 (2026-11-10)
