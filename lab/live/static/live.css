@@ -13,7 +13,7 @@ body { margin: 0; background: var(--mx-paper); color: var(--mx-ink); font-family
 .live-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .live-form h2:first-child { margin-top: 0; }
 .live-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem 1rem; }
-.live-fields label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; font-weight: 600; }
+.live-fields label { display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.78rem; font-weight: 600; }
 .live-fields input, .live-fields select { font: inherit; font-weight: 400; padding: 0.35rem 0.55rem; border-radius: var(--mx-radius-sm);
   border: 1px solid var(--mx-line); background: var(--mx-paper); color: var(--mx-ink); }
 .live-fields input:focus-visible, .live-fields select:focus-visible, .live-presets input:focus-visible { outline: 2px solid var(--mx-focus); outline-offset: 2px; }
@@ -26,3 +26,5 @@ body { margin: 0; background: var(--mx-paper); color: var(--mx-ink); font-family
 .live table { border-collapse: collapse; width: 100%; }
 .live th, .live td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--mx-line); }
 .live code { font-family: "JetBrains Mono", monospace; font-size: 0.85em; }
+.live .live-chart { margin-top: 0.6rem; cursor: default; }
+.live .live-wait { margin: 0.8rem 0 0; }

@@ -44,20 +44,9 @@
 
   <section id="now" class="mx-lab-replay" hidden aria-labelledby="now-title">
     <h2 id="now-title"><span class="mx-lab-tag mx-lab-tag-real">Live</span> <span id="now-run"></span></h2>
-    <div class="mx-lab-stage">
-      <figure class="mx-lab-server" id="now-grid"><figcaption>The server, right now. Each square is a request in flight.</figcaption></figure>
-      <div class="mx-lab-readouts">
-        <div class="mx-lab-source">
-          <h4>Measured at the server</h4>
-          <div class="mx-lab-stat" id="now-inflight"><b>0</b><span>requests in flight now</span></div>
-          <div class="mx-lab-stat"><b id="now-delivered">0</b><span>images delivered so far</span></div>
-          <div class="mx-lab-stat" id="now-429"><b>0</b><span>turned away (429) so far</span></div>
-        </div>
-        <div class="mx-lab-source machyon"><h4>Reported by Machyon</h4>
-          <p class="mx-lab-wait">Machyon reports once each run finishes; the replay below shows it.</p></div>
-      </div>
-    </div>
-    <canvas id="now-chart" class="mx-lab-chart" role="img" aria-label="Requests in flight at the server during this run"></canvas>
+    <div id="now-stage"></div>
+    <p class="mx-lab-wait live-wait">Machyon reports once each run finishes; the replay below shows its report.</p>
+    <canvas id="now-chart" class="mx-lab-chart live-chart" role="img" aria-label="Requests in flight at the server during this run"></canvas>
   </section>
 
   <section id="result" hidden>

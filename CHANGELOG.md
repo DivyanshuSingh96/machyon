@@ -8,6 +8,7 @@
 **Documentation**
 - New **Cookbook**, starting with "Build your first image dataset": a beginner project that downloads a small, credited photo dataset into category folders, saves the `Report`, and writes a gallery of the result.
 - New **Interactive Lab**, starting with the Adaptive Concurrency Lab: build intuition with a model of a server's limit, predict what Machyon does when the server answers 429, then replay four real recorded runs against the same server. `python -m lab.live` runs the same experiment on your own computer, and `python -m lab.record` makes your own recordings.
+- Docs polish: callout boxes keep their own colour in dark mode, form controls leave room for their focus ring, and the Cookbook's gallery picture ends on whole cards.
 - Corrected how fast Machyon backs off when a server pushes back: within a second or two (it judges throughput in one-second windows), not "the moment" it happens, as the README and home page said. The Lab's recordings show the delay.
 
 ## 1.0.1 (2026-11-09)
