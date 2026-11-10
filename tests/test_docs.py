@@ -243,3 +243,12 @@ def test_examples_compile():
 
     for path in (ROOT / "examples").glob("*.py"):
         py_compile.compile(str(path), doraise=True)
+
+
+def test_cli_reference_covers_every_command_once_fenced():
+    # cli_help() returns its own ```text block. Wrapping it in another fence nests the fences, and the page after
+    # the first command renders as one broken code block.
+    from machyon.cli import COMMANDS
+    text = (ROOT / "docs" / "reference" / "cli.md").read_text(encoding="utf-8")
+    assert not re.search(r"```[a-z]*\s*\n\{\{ cli_help", text)
+    assert set(re.findall(r'cli_help\("([a-z]+)"\)', text)) == set(COMMANDS)

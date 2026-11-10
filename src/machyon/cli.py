@@ -14,7 +14,7 @@ from .naming import DEFAULT_TEMPLATE, as_namer
 from .sources import iter_pairs, read_rows
 from .utils import run, setup_logging
 
-COMMANDS = ("download", "retry", "names", "doctor")
+COMMANDS = ("download", "retry", "names", "doctor", "ui")
 
 
 def _tuning(p: argparse.ArgumentParser) -> None:
@@ -158,7 +158,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--referer", help="Referer header to send")
     p.add_argument("--header", action="append", default=[], metavar="'Name: value'", help="extra request header")
 
+    p = sub.add_parser("ui", help="open Machyon in your browser: a local app on this computer")
+    p.add_argument("--output-dir", default="~/machyon-downloads",
+                   help="folder that holds every run (default: %(default)s)")
+    p.add_argument("--port", type=int, help="port on 127.0.0.1 (default: 8765, or a free one if it's taken)")
+    p.add_argument("--no-browser", action="store_true", help="don't open a browser; just print the link")
+    p.add_argument("--max-upload-mb", type=int, default=256,
+                   help="largest manifest you can upload, in MB (default: %(default)s; plain .json: 50)")
+
     a = parser.parse_args(argv)
+    if a.command == "ui":
+        from .ui import serve  # imported only here: the other commands never load the web app
+
+        return serve(a.output_dir, a.port, not a.no_browser, a.max_upload_mb)
     if a.command == "doctor":
         from .diagnostics import doctor
 
