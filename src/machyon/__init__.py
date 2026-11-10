@@ -22,11 +22,12 @@ from .errors import FatalDiskError, MachyonError
 from .limiter import AdaptiveLimiter
 from .metrics import Report
 from .naming import ImageRenamer, NameTemplate, generate_hashed_name
+from .progress import ProgressSnapshot
 from .sources import read_rows
 from .utils import run, setup_logging
 
 __all__ = [
-    "download", "adownload", "Downloader", "DownloadConfig", "Report",
+    "download", "adownload", "Downloader", "DownloadConfig", "Report", "ProgressSnapshot",
     "NameTemplate", "read_rows", "run", "setup_logging",
     "MachyonError", "FatalDiskError", "AdaptiveLimiter",
     # class-based API
