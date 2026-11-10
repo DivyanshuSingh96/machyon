@@ -622,14 +622,18 @@ body {
 .mx-lab-answer .yes { color: var(--lab-ok); }
 .mx-lab-answer .no { color: var(--lab-muted); }
 .mx-lab-answer-bars { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem;
-  height: 8rem; max-width: 26rem; margin: 0.6rem 0 1.6rem; border-bottom: 1px solid var(--lab-line); }
+  height: 8rem; max-width: 26rem; margin: 0.6rem 0 2.4rem; border-bottom: 1px solid var(--lab-line); }
 .mx-lab-answer-bars .bar { position: relative; display: flex; flex-direction: column; justify-content: flex-end; }
 .mx-lab-answer-bars .fill { position: relative; display: block; border-radius: 6px 6px 0 0; background: var(--lab-signal); opacity: .45; }
 .mx-lab-answer-bars .bar.over .fill { background: var(--lab-over-fill); opacity: .9; }
 .mx-lab-answer-bars .bar.cut .fill { background: var(--lab-signal); opacity: 1; }
 .mx-lab-answer-bars .bar.cut small { color: var(--lab-ink); font-weight: 800; }
+/* a second the host pause covered: the server was simply empty, which says nothing about the limit */
+.mx-lab-answer-bars .bar.paused .fill { background: repeating-linear-gradient(135deg, var(--lab-line) 0 4px, transparent 4px 8px);
+  opacity: 1; box-shadow: inset 0 0 0 1.5px var(--lab-line); }
 .mx-lab-answer-bars .fill b { position: absolute; top: -1.15rem; left: 0; right: 0; text-align: center; font: 800 0.7rem var(--mx-head-font); color: var(--lab-ink); }
-.mx-lab-answer-bars .bar small { position: absolute; bottom: -1.25rem; left: 0; right: 0; text-align: center; font-size: 0.62rem; color: var(--lab-muted); }
+.mx-lab-answer-bars .bar small { position: absolute; top: calc(100% + 0.3rem); left: 0; right: 0; text-align: center; font-size: 0.62rem;
+  line-height: 1.25; color: var(--lab-muted); }
 .mx-lab-answer-bars .limit { position: absolute; left: -0.2rem; right: -0.2rem; border-top: 1.5px dashed var(--lab-over); }
 .mx-lab-answer-bars .limit small { position: absolute; right: 0; top: -1.05rem; font-size: 0.6rem; font-weight: 700; color: var(--lab-over);
   background: var(--lab-paper); padding: 0 0.25rem; border-radius: 4px; }
