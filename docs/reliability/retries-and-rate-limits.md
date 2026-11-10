@@ -58,8 +58,8 @@ A 429 means "this host wants fewer requests". Machyon responds in three ways at 
    slowly while things stay calm. [Adaptive concurrency](../performance/adaptive-concurrency.md)
 
 The result on a CDN that throttles above 48 requests in flight, from the
-[benchmarks](../performance/benchmarks.md): Machyon finished all 3,000 images at 343 img/s, while a fixed-pool
-downloader at its default settings lost 2,997 of them to 429s.
+[benchmarks](../performance/benchmarks.md): Machyon finished all 3,000 images at 301 img/s, while a fixed-pool
+downloader at its default settings lost 2,995 of them to 429s.
 
 ## Hedging: no straggler tax
 

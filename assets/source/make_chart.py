@@ -1,10 +1,10 @@
 """Benchmark chart for the README (light + dark SVG), in the docs palette (Sky on Honey paper / Aurora on brand slate) with Machyon in the
-logo's slate. Data: benchmarks/results-2026-11-07.jsonl (byte-verified runs)."""
+logo's slate. Data: benchmarks/results-2026-11-10.jsonl (byte-verified runs)."""
 import json
 import os
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-RESULTS = os.path.join(OUT, "..", "benchmarks", "results-2026-11-07.jsonl")
+RESULTS = os.path.join(OUT, "..", "benchmarks", "results-2026-11-10.jsonl")
 rows = [json.loads(line) for line in open(RESULTS) if line.strip().startswith("{")]
 get = {(r["variant"], r["scenario"]): r for r in rows}
 
@@ -38,7 +38,7 @@ def chart(t):
          f'<text x="24" y="62" font-size="13" fill="{t["ink2"]}">Higher is better. Same fault-injecting CDN, same machine (2 vCPU), default settings for both tools.</text>']
     # legend
     lx = 24
-    for color, label in ((t["a"], "Machyon 1.0"), (t["b"], "img2dataset 1.47 (defaults)")):
+    for color, label in ((t["a"], "Machyon 1.1"), (t["b"], "img2dataset 1.47 (defaults)")):
         s.append(f'<rect x="{lx}" y="76" width="12" height="12" rx="3" fill="{color}"/>')
         s.append(f'<text x="{lx + 18}" y="86.5" font-size="13" fill="{t["ink2"]}">{label}</text>')
         lx += 18 + len(label) * 7.2 + 24
@@ -64,7 +64,9 @@ def chart(t):
             weight = "700" if j == 0 else "400"
             s.append(f'<text x="{sx(v) + 8}" y="{y + BAR - 3}" font-size="12.5" font-weight="{weight}" '
                      f'fill="{t["ink"] if j == 0 else t["ink2"]}">{txt}<tspan dx="8" fill="{t["muted"]}">{note}</tspan></text>')
-    s.append(f'<text x="24" y="{H - 14}" font-size="11.5" fill="{t["muted"]}">img2dataset hand-tuned to 24 in flight reaches 222 img/s on the rate-limited CDN; '
+    best = max((r for r in rows if r["variant"].startswith("i2d-r3-threads")), key=lambda r: r["img_per_s"])
+    s.append(f'<text x="24" y="{H - 14}" font-size="11.5" fill="{t["muted"]}">img2dataset hand-tuned to '
+             f'{best["max_inflight"]} in flight reaches {best["img_per_s"]:.0f} img/s on the rate-limited CDN; '
              f'Machyon finds its limit itself. Reproduce: python benchmarks/harness.py</text>')
     s.append("</svg>")
     return "\n".join(s)

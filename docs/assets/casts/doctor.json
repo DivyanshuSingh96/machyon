@@ -1,10 +1,10 @@
 {
  "title": "Diagnose one URL",
- "version": "1.0.0",
+ "version": "1.1.0",
  "steps": [
   {
    "cmd": "machyon doctor http://cdn.example.test/img/337.jpg",
-   "output": "machyon 1.0.0 | Python 3.13.18 on Linux-x86_64\naiohttp 3.14.5 | OpenSSL 3.5.9 29 Sep 2026\n  truststore 0.10.5\n  certifi    2026.10.23\n  uvloop     not installed\n  winloop    not installed\n\nProxy for cdn.example.test: none\nDNS: cdn.example.test -> 127.0.0.1\n\nTLS trust sources (Machyon uses 'native' by default):\n  native   OK  HTTP 200 OK, text/html, 22 bytes, NOT an image  (33 ms)\n  certifi  OK  HTTP 200 OK, text/html, 22 bytes, NOT an image  (32 ms)\n  python   OK  HTTP 200 OK, text/html, 22 bytes, NOT an image  (32 ms)\n\nVerdict:\n  Connection is fine, but the server didn't return an image (login wall, hotlink protection or bot check). Try --referer with the page the image appears on.",
+   "output": "machyon 1.1.0 | Python 3.13.18 on Linux-x86_64\naiohttp 3.14.5 | OpenSSL 3.5.9 29 Sep 2026\n  truststore 0.10.4\n  certifi    2026.10.18\n  uvloop     0.23.0\n  winloop    not installed\n\nProxy for cdn.example.test: none\nDNS: cdn.example.test -> 127.0.0.1\n\nTLS trust sources (Machyon uses 'native' by default):\n  native   OK  HTTP 200 OK, text/html, 22 bytes, NOT an image  (33 ms)\n  certifi  OK  HTTP 200 OK, text/html, 22 bytes, NOT an image  (32 ms)\n  python   OK  HTTP 200 OK, text/html, 22 bytes, NOT an image  (32 ms)\n\nVerdict:\n  Connection is fine, but the server didn't return an image (login wall, hotlink protection or bot check). Try --referer with the page the image appears on.",
    "exit": 0
   }
  ]
