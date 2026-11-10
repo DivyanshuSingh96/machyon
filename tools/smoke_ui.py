@@ -8,6 +8,7 @@ sdist fails here instead of on a user's computer.
 from __future__ import annotations
 
 import json
+import os
 import re
 import socket
 import subprocess
@@ -20,8 +21,23 @@ from pathlib import Path
 STATIC = Path(__file__).resolve().parents[1] / "src" / "machyon" / "ui" / "static"
 
 
+def stop(proc: subprocess.Popen) -> None:
+    """Stop the server and everything it started. On Windows a venv's python.exe is a launcher that runs the real
+    interpreter as a child process: terminating the launcher alone leaves the server running (and its lock file open),
+    so the whole process tree is ended."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+    else:
+        proc.terminate()
+    try:
+        proc.wait(20)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(10)
+
+
 def main(python: str) -> int:
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         where = subprocess.run([python, "-c", "import machyon, sys; print(machyon.__file__)"], cwd=tmp,
                                capture_output=True, text=True, check=True).stdout.strip()
         if str(STATIC.parents[2]) in where:
@@ -68,8 +84,7 @@ def main(python: str) -> int:
             print(f"OK: machyon ui {state['version']} from {where}: page, API and {len(files)} static files served")
             return 0
         finally:
-            proc.terminate()
-            proc.wait(20)
+            stop(proc)
 
 
 if __name__ == "__main__":

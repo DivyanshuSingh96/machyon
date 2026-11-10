@@ -138,7 +138,24 @@ body {
 .md-typeset h3 { font-weight: 700; font-size: 1.12em; margin: 1.7em 0 0.6em; }
 .md-typeset h4 { font-weight: 700; }
 .md-typeset strong { color: var(--mx-ink); font-weight: 650; }
-.md-content__inner { max-width: 40rem; margin-bottom: 3rem; }          /* ~75 characters a line */
+/* The text column: ~75 characters a line, centred in whatever room it has. Without a sidebar beside it (narrow
+   windows, where the contents become a floating button), it used to hug the left edge with empty space on the
+   right. Never narrower than the theme's own gutters. */
+.md-content { --mx-measure: 40rem; --mx-gutter: 0.8rem; }
+@media screen and (min-width: 76.25em) { .md-content { --mx-gutter: 1.2rem; } }
+.md-content__inner, .md-content > .md-path { max-width: var(--mx-measure);
+  margin-left: max(var(--mx-gutter), (100% - var(--mx-measure)) / 2);
+  margin-right: max(var(--mx-gutter), (100% - var(--mx-measure)) / 2); }
+.md-content__inner { margin-bottom: 3rem; }
+/* Phones and small windows: the theme runs code blocks edge to edge. Keep them in the column, like everything else. */
+@media screen and (max-width: 44.984375em) {
+  .md-content__inner > pre, .md-content__inner > .highlight { margin-left: 0; margin-right: 0; }
+  .md-content__inner > .highlight + .result { margin-left: 0; margin-right: 0; border-left-width: 0.05rem;
+    border-right-width: 0.05rem; border-radius: 0 0 var(--mx-radius-sm) var(--mx-radius-sm); }
+  .md-content__inner > pre > code, .md-content__inner > .highlight > pre > code { border-radius: var(--mx-radius-sm); }
+  .md-content__inner > .highlight span.filename + pre > code { border-top-left-radius: 0; border-top-right-radius: 0; }
+  .md-content__inner > .tabbed-set .tabbed-labels { margin-left: 0; margin-right: 0; max-width: 100%; }
+}
 .mx-home .md-content__inner > h2, .mx-home .md-content__inner > p { max-width: 44rem; }
 .md-typeset .lead { font-size: 1.1em; line-height: 1.65; color: var(--mx-muted); margin-top: -0.3em; }
 
@@ -172,6 +189,26 @@ body {
 .md-typeset table:not([class]) td { border-top: 1px solid var(--mx-band2); }
 .md-typeset table:not([class]) tbody tr:hover { background: color-mix(in srgb, var(--mx-band2) 55%, transparent); box-shadow: none; }
 .md-typeset table:not([class]) td:not(:last-child) code, .md-typeset table:not([class]) th code { white-space: nowrap; }
+.md-typeset table:not([class]) td { overflow-wrap: break-word; }
+/* A table too wide for the column (assets/js/tables.js decides, per table and per window size): one card per row,
+   each value under its column's heading, instead of a table cut off at the screen's edge. */
+.md-typeset table[data-mx-stacked] { display: block; width: 100%; min-width: 0; }
+.md-typeset table[data-mx-stacked] thead { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; }
+.md-typeset table[data-mx-stacked] tbody { display: block; }
+.md-typeset table[data-mx-stacked] tr { display: block; padding: 0.55rem 0.9rem; border-top: 1px solid var(--mx-band2); }
+.md-typeset table[data-mx-stacked] tr:first-child { border-top: 0; }
+/* short values (numbers, times) sit side by side; a long one takes the whole line */
+.md-typeset table[data-mx-stacked] td { display: inline-block; vertical-align: top; min-width: 6.5rem; max-width: 100%;
+  margin-right: 1.2rem; padding: 0.3rem 0; border: 0; overflow-wrap: anywhere;
+  text-align: left !important; }                              /* !important: beats a column's inline alignment */
+.md-typeset table[data-mx-stacked] td::before { content: attr(data-label); display: block; margin-bottom: 0.05rem;
+  font-family: var(--mx-head-font); font-weight: 700; font-size: 0.66rem; letter-spacing: 0.02em; color: var(--mx-muted); }
+.md-typeset table[data-mx-stacked] td:empty { display: none; }       /* "same as the row above" cells */
+.md-typeset table[data-mx-stacked] td code { white-space: normal; }
+.md-typeset table[data-mx-stacked] tbody th { display: block; padding: 0.15rem 0 0.3rem; border: 0; text-align: left; }   /* a row's own heading (the Lab's run names) */
+.md-typeset table[data-mx-stacked] td:nth-child(n) { white-space: normal; }
+
 
 /* admonitions and details: soft cards, a thin accent edge */
 .md-typeset .admonition, .md-typeset details { border: 0; border-left: 3px solid var(--mx-accent); border-radius: var(--mx-radius-sm);
@@ -226,6 +263,17 @@ body {
 .md-nav__item .md-nav__link--active { color: var(--mx-ink); font-weight: 700; background: var(--mx-chip);
   box-shadow: inset 3px 0 0 var(--mx-accent); }
 .md-nav__link:hover, .md-nav__link:focus { color: var(--mx-ink); }
+/* "On this page": the theme gives its links no hover background, so hovering one barely shows. Use the same soft
+   pill as the site navigation (the current section keeps its stronger one). */
+.md-nav--secondary .md-nav__link[href]:hover, .md-nav--secondary .md-nav__link[href]:focus-visible {
+  color: var(--mx-ink); background-color: color-mix(in srgb, var(--mx-chip) 65%, transparent); }
+.md-nav--secondary .md-nav__link--active[href]:hover { background-color: var(--mx-chip); }
+
+/* very narrow phones (under 360 px): the header's title gives way so the search and theme buttons stay on screen */
+@media screen and (max-width: 22.4em) {
+  .md-header__button.md-logo img { height: 1.8rem; }      /* the lockup fits beside the buttons; symbol still >= 28 px */
+  .md-header__title { margin-left: 0; margin-right: 0; }
+}
 
 /* footer */
 .md-footer { border-top: 1px solid var(--mx-line); }
@@ -244,7 +292,7 @@ body {
   background: var(--mx-accent); color: var(--mx-accent-ink); border-color: var(--mx-accent); }
 
 /* ------------------------------------------------------------------ home */
-.mx-home .md-content__inner { max-width: 62rem; }
+.mx-home .md-content__inner { --mx-measure: 62rem; }
 .mx-hero { text-align: center; padding: 1.2rem 0 1rem; }
 .mx-hero-mark { width: min(100%, 34rem); height: auto; display: block; margin: 0 auto 1.6rem; overflow: visible; }
 .mx-hero-mark .mx-ink, .mx-five svg .mx-ink { fill: var(--mx-logo-body); }
@@ -272,7 +320,7 @@ body {
 @keyframes mx-eyes { from { transform: scaleY(0.2); } to { transform: none; } }
 
 /* cards */
-.mx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)); gap: 1rem; margin: 1.2rem 0 1.8rem; }
+.mx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15.5rem, 100%), 1fr)); gap: 1rem; margin: 1.2rem 0 1.8rem; }
 .mx-card, .mx-step, .mx-ends > div, .mx-teaser, .mx-sim, .mx-opts {
   background: var(--mx-surface); border-radius: var(--mx-radius); box-shadow: var(--mx-shadow); }
 .mx-card { padding: 1rem 1.1rem; transition: transform .2s var(--mx-ease), box-shadow .2s var(--mx-ease); }
@@ -348,13 +396,15 @@ body {
 /* engine simulator */
 .mx-sim { padding: 1rem; margin: 1.3rem 0; }
 .mx-sim-controls { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin-bottom: 0.7rem; font-size: 0.74rem; }
-.mx-sim-controls label { display: inline-flex; align-items: center; gap: 0.6rem; }   /* room for the focus ring */
+.mx-sim-controls label { display: inline-flex; align-items: center; gap: 0.6rem; min-width: 0; max-width: 100%; }   /* room for the focus ring */
+.mx-sim-controls select { min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.mx-sim-table > div { overflow-x: auto; }   /* the decision table scrolls inside the card on narrow screens */
 .mx-sim-controls select, .mx-sim-controls button { font: inherit; padding: 0.28rem 0.7rem; border-radius: 999px;
   border: 1.5px solid var(--mx-line); background: var(--mx-paper); color: var(--mx-ink); }
 .mx-sim-controls button { font-weight: 700; cursor: pointer; background: var(--mx-accent); color: var(--mx-accent-ink); border-color: var(--mx-accent); }
 .mx-sim-about { flex-basis: 100%; color: var(--mx-muted); font-size: 0.72rem; }
 .mx-sim canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
-.mx-sim-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 0.5rem; margin-top: 0.7rem; font-size: 0.72rem; color: var(--mx-muted); }
+.mx-sim-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr)); gap: 0.5rem; margin-top: 0.7rem; font-size: 0.72rem; color: var(--mx-muted); }
 .mx-sim-stats div { background: var(--mx-band2); border-radius: var(--mx-radius-sm); padding: 0.4rem 0.6rem; }
 [data-md-color-scheme="slate"] .mx-sim-stats div { background: var(--mx-paper); }   /* band2 is the card colour at night */
 .mx-sim-stats b { display: block; font-size: 0.95rem; font-variant-numeric: tabular-nums; color: var(--mx-ink); }
@@ -453,14 +503,14 @@ body {
 }
 
 /* the Lab page is wider than a reading page: the widgets get room, the prose keeps its ~70-character measure */
-.md-content:has(.mx-lab-replay) .md-content__inner { max-width: 54rem; }
+.md-content:has(.mx-lab-replay) { --mx-measure: 54rem; }
 .md-content:has(.mx-lab-replay) .md-content__inner > :is(p, ul, ol, h1, h2, h3, hr, .mx-lab-levels) { max-width: 40rem; }
 
 .mx-lab-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.mx-lab-levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.6rem; margin: 1.2rem 0 1.6rem; }
+.mx-lab-levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); gap: 0.6rem; margin: 1.2rem 0 1.6rem; }
 .mx-lab-levels > div { background: var(--lab-paper); border: 1px solid var(--lab-line); border-radius: 12px; padding: 0.6rem 0.8rem;
   font-size: 0.74rem; color: var(--lab-muted); }
-.mx-lab-levels.compact { grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); }
+.mx-lab-levels.compact { grid-template-columns: repeat(auto-fit, minmax(min(8.5rem, 100%), 1fr)); }
 .mx-lab-levels b { display: block; color: var(--lab-ink); font-family: var(--mx-head-font); font-size: 0.8rem; margin-bottom: 0.15rem; }
 .md-typeset img.mx-shot { border-radius: var(--mx-radius-sm); box-shadow: var(--mx-shadow-lift); }
 .mx-lab-tag { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.55rem; border-radius: 999px;
@@ -560,7 +610,7 @@ body {
   to { box-shadow: 0 0 0 0.55rem transparent; } }
 
 /* the run picker: each run's shape at a glance */
-.mx-lab-tabs { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0.5rem; }
+.mx-lab-tabs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(9.5rem, 100%), 1fr)); gap: 0.5rem; }
 .mx-lab-tab { display: flex; flex-direction: column; gap: 0.35rem; text-align: left; font: inherit; font-size: 0.7rem; font-weight: 600;
   line-height: 1.3; padding: 0.5rem 0.65rem 0.6rem; border-radius: 12px; cursor: pointer; color: var(--lab-ink);
   border: 1.5px solid var(--lab-line); background: transparent; transition: border-color .15s var(--mx-ease), background .15s var(--mx-ease); }
