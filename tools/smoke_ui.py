@@ -25,7 +25,7 @@ def main(python: str) -> int:
         where = subprocess.run([python, "-c", "import machyon, sys; print(machyon.__file__)"], cwd=tmp,
                                capture_output=True, text=True, check=True).stdout.strip()
         if str(STATIC.parents[2]) in where:
-            print(f"✗ machyon is imported from the checkout ({where}), not from an installed wheel")
+            print(f"FAIL: machyon is imported from the checkout ({where}), not from an installed wheel")
             return 1
         s = socket.socket()
         s.bind(("127.0.0.1", 0))
@@ -44,7 +44,7 @@ def main(python: str) -> int:
                 m = re.search(r"#token=([A-Za-z0-9_-]+)", line)
                 token = m and m.group(1)
             if not token:
-                print(f"✗ machyon ui didn't print its link:\n{out}")
+                print(f"FAIL: machyon ui didn't print its link:\n{out}")
                 return 1
             base = f"http://127.0.0.1:{port}"
             missing = []
@@ -63,9 +63,9 @@ def main(python: str) -> int:
             with urllib.request.urlopen(req, timeout=10) as r:
                 state = json.loads(r.read())
             if missing:
-                print("✗ not served by the installed app:\n  " + "\n  ".join(missing))
+                print("FAIL: not served by the installed app:\n  " + "\n  ".join(missing))
                 return 1
-            print(f"✓ machyon ui {state['version']} from {where}: page, API and {len(files)} static files served")
+            print(f"OK: machyon ui {state['version']} from {where}: page, API and {len(files)} static files served")
             return 0
         finally:
             proc.terminate()
