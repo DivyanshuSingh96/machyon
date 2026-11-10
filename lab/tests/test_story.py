@@ -42,6 +42,12 @@ def test_pushing_past_the_limit_gets_throttled_hard(rec):
     assert 0.35 <= share <= 0.65, f"'about half of every round came back as 429': {share:.0%}"
 
 
+def test_pushing_past_the_limit_was_slower_than_being_timid(rec):
+    # "In this experiment, pushing past the limit was slower than being timid": 48 in flight against 8.
+    _, runs = rec
+    assert report(runs["fixed-high"])["duration"] > report(runs["fixed-low"])["duration"]
+
+
 def test_timid_run_left_two_thirds_of_the_server_idle(rec):
     doc, runs = rec
     assert runs["fixed-low"]["analysis"]["server_inflight_peak"] * 3 == doc["notes"]["server_ceiling"]

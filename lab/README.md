@@ -1,14 +1,42 @@
-# Machyon Interactive Lab: recordings
+# Machyon Interactive Lab
 
-This folder records **real experiments**: the real Machyon downloading from the fake CDN (`tests/fakecdn.py`), on
-your machine, captured as one JSON file that the documentation can replay in the browser. Nothing here is part of the
-`machyon` package, and nothing here reaches the internet.
+This folder runs **real experiments**: the real Machyon downloading from the fake CDN (`tests/fakecdn.py`), on your
+machine. Nothing here is part of the `machyon` package, and nothing here reaches the internet.
+
+You need a clone of the repository, Python 3.11 or newer, and a browser.
 
 ```bash
-pip install -e ".[dev]"                          # from a clone of the repository
+pip install -e .                                 # from the root of the clone
+```
+
+## The Live Lab
+
+```bash
+python -m lab.live
+```
+
+This starts a small local app at `http://127.0.0.1:8770/` and opens it in your browser (`--port N` to use another
+port, `--no-browser` to open it yourself). Press **Run the experiment** to run the Adaptive Concurrency Lab's four
+runs, or change the server's limit, response time, error rate and number of images, or try a single run of your own.
+While a run is going, the page shows what the server sees, live. When the runs finish, it replays them with the
+documentation's own widgets and offers the recording as a JSON download. Press Ctrl+C in the terminal to stop it.
+
+The app only listens on `127.0.0.1`, refuses requests that come from other sites, and caps every setting.
+
+## Recordings
+
+```bash
 python -m lab.record adaptive_concurrency        # writes docs/assets/lab/recordings/adaptive-concurrency.json
+python -m lab.record adaptive_concurrency --out my-run.json               # somewhere else
 python -m lab.record adaptive_concurrency --images 100 --out trial.json   # a quick trial
-python -m pytest -q lab/tests                    # the Lab's own tests (needs Node.js for the JS validator check)
+```
+
+`lab.record` runs the experiment and writes the JSON file; it doesn't open anything. The documentation shows the
+committed recording (the first command overwrites it). To check a recording:
+
+```bash
+pip install -e ".[dev]"
+python -m pytest -q lab/tests                    # the Lab's own tests (needs Node.js for the JavaScript checks)
 ```
 
 ## How a recording is made

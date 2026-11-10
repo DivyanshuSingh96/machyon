@@ -242,14 +242,25 @@
       } else if (kind === "reqOver") { // leaves Machyon and lands beyond the limit
         const [x, y] = doorCenter(at);
         particles.push({ kind: "req", x0: o, y0: geo.midY - 14 + j, x1: x, y1: y, t0: now, dur: 420, color: c.nightSignal });
-      } else if (kind === "img" || kind === "err") {   // an answer comes back
-        const [x, y] = slotCenter(at);
-        particles.push({ kind, x0: x, y0: y, x1: o, y1: geo.midY + 14 + j, t0: now, dur: 520,
-          color: kind === "img" ? c.nightOk : c.nightErr });
-      } else if (kind === "turned" || kind === "turnedSlot") {   // bounced back: from beyond the limit, or, rarely, from
-        const [x, y] = kind === "turned" ? doorCenter(at) : slotCenter(at);   // a slot (counted before its handshake)
-        particles.push({ kind: "turned", x0: x, y0: y, x1: o, y1: geo.midY + 14 + j, t0: now, dur: 560, arc: 18, color: c.nightOver });
       }
+      kick();
+    }
+
+    /** An answer travelling back to Machyon. Where it starts is where the request was drawn (a slot, or beyond the
+        limit); what it looks like is decided only by the answer itself (see answerFor). */
+    function answer(from, at, kind, delay = 0) {
+      if (!moving() || !geo) return;
+      if (particles.length > 900) return;
+      if (!c) c = palette(root);
+      const now = performance.now() + delay, j = (Math.random() - 0.5) * 9, o = geo.opaX + 2;
+      const [x, y] = from === "door" ? doorCenter(at) : slotCenter(at);
+      const look = {
+        ok: { kind: "img", color: c.nightOk, dur: 520 },                  // an image: a green square
+        throttled: { kind: "turned", color: c.nightOver, dur: 560, arc: 18 },   // a 429: a coral dot that bounces
+        error: { kind: "err", color: c.nightErr, dur: 520 },              // anything else: a honey dot
+      }[kind];
+      particles.push({ kind: look.kind, x0: x, y0: y, x1: o, y1: geo.midY + 14 + j, t0: now, dur: look.dur,
+        arc: look.arc || 0, color: look.color });
       kick();
     }
 
@@ -265,7 +276,7 @@
       el: root,
       /** busy: [{slot, p (0..1 through its answer), kind: "ok" | "err"}]; overs: requests beyond the limit now. */
       set(list, overs = 0, clock = "") { busy = list; doorBusy = Math.min(door, overs); nowClock = clock; kick(); },
-      spawn,
+      spawn, answer,
       /** fn(now) runs every frame until stopped; used by the model's own clock. */
       animate(fn) { ticking = fn; kick(); },
       stop() { ticking = null; },
@@ -273,8 +284,21 @@
     };
   }
 
-  /** Requests as the server saw them, with a stable place on the stage for each one. A request is "over the limit"
-      exactly when the server counted more than `cap` in flight as it arrived: the fake CDN's own rule. */
+  /** What a finished request brought back, from the server's own record of it, and nothing else: a complete 200 is an
+      image, a 429 is "too many", anything else (a 503, a cut-off body, no status at all) is an error. */
+  function answerKind(status, outcome) {
+    if (status === 200 && (outcome === undefined || outcome === null || outcome === "complete")) return "ok";
+    return status === 429 ? "throttled" : "error";
+  }
+  /** The returning dot for one request: it leaves from where the request was drawn, and looks like its answer. A
+      request can arrive while the server counts more than its limit and still be served (the server decides after a
+      new connection's handshake, when others may have finished), so the place must never decide the colour. */
+  function answerFor(r) {
+    return { from: r.over ? "door" : "slot", kind: answerKind(r.status, r.outcome) };
+  }
+
+  /** Requests as the server saw them, paired start to end by request id, with a stable place on the stage for each.
+      A request is drawn beyond the limit when the server counted more than `cap` in flight as it arrived. */
   function placeRequests(events, cap) {
     const open = new Map(), reqs = [];
     const freeSlots = [], freeDoor = [];
@@ -286,13 +310,13 @@
         let place;
         if (over) { place = take(freeDoor, nextDoor); if (place === nextDoor) nextDoor++; }
         else { place = take(freeSlots, nextSlot); if (place === nextSlot) nextSlot++; }
-        const r = { s: e.t_ms, e: Infinity, status: null, over, place };
+        const r = { id: e.id, s: e.t_ms, e: Infinity, status: null, outcome: null, over, place };
         open.set(e.id, r); reqs.push(r);
       } else {
         const r = open.get(e.id);
         if (!r) continue;
         open.delete(e.id);
-        r.e = e.t_ms; r.status = e.status;
+        r.e = e.t_ms; r.status = e.status; r.outcome = e.outcome;
         (r.over ? freeDoor : freeSlots).push(r.place);
       }
     }
@@ -369,13 +393,13 @@
       const busy = [];
       for (let i = 0; i < served; i++) {
         const p = (now / ROUND + phase(i, served)) % 1;
-        if (p < lastP[i]) { stage.spawn("img", i); stage.spawn("req", i, 40); }
+        if (p < lastP[i]) { stage.answer("slot", i, "ok"); stage.spawn("req", i, 40); }
         lastP[i] = p;
         busy.push({ slot: i, p, kind: "ok" });
       }
       for (let k = 0; k < turned; k++) {
         const p = (now / ROUND + phase(k, turned) + 0.37) % 1, j = CAP + k;
-        if (p < lastP[j]) { stage.spawn("reqOver", k); stage.spawn("turned", k, 380); }
+        if (p < lastP[j]) { stage.spawn("reqOver", k); stage.answer("door", k, "throttled", 380); }
         lastP[j] = p;
       }
       stage.set(busy, turned);
@@ -733,7 +757,8 @@
         });
         sample(countTo(cur.endT, prevT), countTo(cur.endT, t), (k) => {
           const r = cur.ends[k];
-          stage.spawn(r.over ? "turned" : r.status === 429 ? "turnedSlot" : r.status === 200 ? "img" : "err", r.place, late(r.e));
+          const a = answerFor(r);
+          stage.answer(a.from, r.place, a.kind, late(r.e));
         });
       }
       prevT = t;
@@ -929,7 +954,9 @@
     }
   }
   // the Live app (lab/live) mounts widgets on a fresh recording, and draws the same stage and instruments while it runs
-  window.MachyonLab = Object.assign(window.MachyonLab || {}, { mountAll: init, createStage, createInstruments });
+  // answerKind, answerFor and placeRequests are pure: the Live app follows the same rules, and lab/tests check them
+  window.MachyonLab = Object.assign(window.MachyonLab || {},
+    { mountAll: init, createStage, createInstruments, answerKind, answerFor, placeRequests });
   if (window.document$ && typeof window.document$.subscribe === "function") window.document$.subscribe(init);
   else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
