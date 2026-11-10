@@ -155,7 +155,7 @@ def run(impl, scenario, n, extra_server="", client_args="", keep=False, timeout=
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--impl", default="new")
+    ap.add_argument("--impl", default="machyon", choices=("machyon", "i2d"))
     ap.add_argument("--scenario", default="clean")
     ap.add_argument("--n", type=int, default=2000)
     ap.add_argument("--server", default="")

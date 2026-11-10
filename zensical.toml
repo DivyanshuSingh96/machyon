@@ -18,7 +18,7 @@ _snippets/
 """
 
 extra_css = ["assets/css/machyon.css"]
-extra_javascript = ["assets/js/engine-sim.js", "assets/js/opa-404.js"]
+extra_javascript = ["assets/js/engine-sim.js", "assets/js/opa-404.js", "assets/js/lab/recording.js", "assets/js/lab/adaptive-lab.js"]
 
 nav = [
   { "Home" = "index.md" },
@@ -46,6 +46,14 @@ nav = [
   { "Performance" = [
     "performance/adaptive-concurrency.md",
     "performance/benchmarks.md",
+  ] },
+  { "Cookbook" = [
+    "cookbook/index.md",
+    "cookbook/first-dataset.md",
+  ] },
+  { "Interactive Lab" = [
+    "lab/index.md",
+    "lab/adaptive-concurrency.md",
   ] },
   { "Reference" = [
     "reference/python-api.md",
@@ -146,11 +154,12 @@ with a reason in failed_downloads.jsonl. Python 3.11+. Install: pip install mach
 full_output = "llms-full.txt"
 
 [project.plugins.llmstxt.sections]
+"Cookbook" = ["cookbook/index.md", "cookbook/first-dataset.md"]
 "Get started" = ["getting-started/quickstart.md", "getting-started/amazon-ml-challenge.md", "getting-started/installation.md", "getting-started/choosing-an-interface.md"]
 "Guides" = ["guides/input-sources.md", "guides/naming.md", "guides/configuration.md", "guides/async-apps.md", "guides/large-runs.md"]
 "Reliability" = ["reliability/zero-lost.md", "reliability/index.md", "reliability/retries-and-rate-limits.md", "reliability/image-validation.md", "reliability/resuming.md", "reliability/failure-ledger.md"]
 "Reference" = ["reference/python-api.md", "reference/configuration.md", "reference/cli.md", "reference/failure-reasons.md", "troubleshooting/index.md"]
-"Design" = ["ARCHITECTURE.md", "performance/adaptive-concurrency.md", "performance/benchmarks.md"]
+"Design" = ["ARCHITECTURE.md", "performance/adaptive-concurrency.md", "performance/benchmarks.md", "lab/index.md", "lab/adaptive-concurrency.md"]
 
 [project.plugins.mkdocstrings.handlers.python]
 paths = ["src"]

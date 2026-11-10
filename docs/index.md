@@ -65,7 +65,7 @@ boundaries](reliability/zero-lost.md).
 
 <div class="mx-card" markdown>
 ### Tunes its own speed
-Concurrency ramps up while throughput improves and backs off the moment a server pushes back.
+Concurrency ramps up while throughput improves and backs off within a second or two when a server pushes back.
 [Adaptive concurrency](performance/adaptive-concurrency.md)
 </div>
 
