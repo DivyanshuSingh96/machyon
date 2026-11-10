@@ -47,20 +47,37 @@ def test_timid_run_left_two_thirds_of_the_server_idle(rec):
     assert runs["fixed-low"]["analysis"]["server_inflight_peak"] * 3 == doc["notes"]["server_ceiling"]
 
 
-def test_after_backing_off_adaptive_stays_well_below_the_limit(rec):
-    doc, runs = rec
-    later = runs["adaptive"]["analysis"]["reaction_to_429"]["inflight_peak_by_second_after"][3:]
-    assert max(later) <= 0.8 * doc["notes"]["server_ceiling"]
+def first_cut(reaction):
+    """Index of the first second after the first 429 whose peak is a real cut: at least a fifth below the peak
+    before it. The same definition as the prediction in adaptive-lab.js."""
+    before = reaction["inflight_peak_before"]
+    after = reaction["inflight_peak_by_second_after"]
+    return next((i for i, v in enumerate(after) if v is not None and v <= 0.8 * before), None)
 
 
-def test_adaptive_overshoots_then_comes_back_under_the_limit_and_stays(rec):
+@pytest.fixture(scope="module")
+def reaction(rec):
     doc, runs = rec
-    ceiling = doc["notes"]["server_ceiling"]
-    reaction = runs["adaptive"]["analysis"]["reaction_to_429"]
-    assert reaction is not None, "adaptive never met the limit in this recording"
-    assert reaction["inflight_peak_before"] > ceiling                  # it overshot
-    later = reaction["inflight_peak_by_second_after"][2:]
-    assert later and all(v is not None and v <= ceiling for v in later)  # within ~3 s it's under and stays under
+    r = runs["adaptive"]["analysis"]["reaction_to_429"]
+    assert r is not None, "adaptive never met the limit in this recording"
+    return r
+
+
+def test_adaptive_overshoots_the_limit(rec, reaction):
+    doc, _ = rec
+    assert reaction["inflight_peak_before"] > doc["notes"]["server_ceiling"]
+
+
+def test_adaptive_cuts_back_a_second_or_two_after_the_first_429(reaction):
+    # "It didn't react instantly ... the cut came a second or two after the first 429" (page and prediction).
+    assert first_cut(reaction) in (1, 2), reaction["inflight_peak_by_second_after"]
+
+
+def test_after_the_cut_adaptive_never_climbs_back_to_where_it_was_throttled(reaction):
+    # "never goes back up to the level that got it throttled". Whether it then settles below the limit or touches
+    # it once more depends on timing (both happen on the same machine), so the page claims neither.
+    later = reaction["inflight_peak_by_second_after"][first_cut(reaction):]
+    assert all(v is None or v < reaction["inflight_peak_before"] for v in later), later
 
 
 def test_adaptive_beats_both_guesses_but_not_knowing_the_limit(rec):

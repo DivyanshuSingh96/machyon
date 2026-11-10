@@ -176,9 +176,10 @@
     }
     const before = reaction.inflight_peak_before;
     const after = reaction.inflight_peak_by_second_after;
-    const firstDrop = after.findIndex((v) => v !== null && v < before);
-    const answer = firstDrop === -1 ? (after.some((v) => v !== null && v > before) ? "more" : "same")
-      : firstDrop === 0 ? "now" : "later";
+    // A cut is a real drop (at least a fifth below the peak), not a request or two of noise.
+    const firstCut = after.findIndex((v) => v !== null && v <= 0.8 * before);
+    const answer = firstCut === -1 ? (after.some((v) => v !== null && v > before) ? "more" : "same")
+      : firstCut === 0 ? "now" : "later";
     const why = {
       later: "Machyon measures its speed over one-second windows and changes its limit only when a window ends, " +
         "so the cut comes a second or two after the first 429. Requests already on their way also have to finish.",

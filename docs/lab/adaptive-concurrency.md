@@ -62,9 +62,11 @@ What the runs show:
 - **Staying under the limit never gets you throttled**, but at 8 requests two-thirds of the server sat idle.
 - **Pushing past it is worse than being timid.** At 48 requests, about half of every round came back as 429, and
   each one had to wait for the server's `Retry-After` before trying again.
-- **Adaptive overshot, noticed, and came back under the limit.** It didn't react instantly: Machyon judges its speed
-  in one-second windows, so the cut came a second or two after the first 429. Then it stayed well below the limit:
-  after being throttled, it only creeps back up slowly.
+- **Adaptive overshot, noticed, and cut back.** It didn't react instantly: Machyon judges its speed in one-second
+  windows, so the cut came a second or two after the first 429. It also remembers where it got into trouble: from
+  then on it climbs only a little at a time and never goes back up to the level that got it throttled. Sometimes
+  that leaves it settled below the limit; sometimes a step crosses the limit again and it cuts once more. Which one
+  happens depends on timing, so a run on your computer can show either.
 - **Knowing the limit in advance is still fastest.** Adaptive is what you get when you don't know it, which is
   almost always. It beat both guesses without being told anything.
 
@@ -94,5 +96,7 @@ python -m lab.record adaptive_concurrency --out my-run.json
 ```
 
 It starts the fake CDN on `127.0.0.1`, runs all four runs (about a minute), and writes the same kind of file you
-just watched. Nothing reaches the internet. The format is described in
+just watched. Nothing reaches the internet. Your times will differ a little, and the adaptive run may take the other
+path after its first cut (settling below the limit, or touching it once more); the pattern above holds either way.
+The format is described in
 [`lab/README.md`](https://github.com/DivyanshuSingh96/machyon/blob/main/lab/README.md).
