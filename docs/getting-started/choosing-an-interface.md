@@ -1,10 +1,10 @@
 ---
-description: Machyon has three ways in. Pick download() for scripts, Downloader or adownload() inside async code, and the CLI for the terminal.
+description: Machyon has four ways in. Pick download() for scripts, Downloader or adownload() inside async code, the CLI for the terminal, and machyon ui for your browser.
 ---
 
 # Choosing an interface
 
-All three use the same engine, the same defaults and the same files on disk. You can start with one and switch
+All of them use the same engine, the same defaults and the same files on disk. You can start with one and switch
 later without re-downloading anything.
 
 | You are writing… | Use | Returns |
@@ -13,6 +13,7 @@ later without re-downloading anything.
 | Code that already runs an event loop (Jupyter, FastAPI, an async worker) | [`await machyon.adownload()`][machyon.adownload] | [`Report`][machyon.Report] |
 | An app that downloads more than once, or needs retries and failures as data | [`machyon.Downloader`][machyon.Downloader] | [`Report`][machyon.Report] per call |
 | Nothing: you're in a terminal | [`machyon`](../reference/cli.md) | exit status 0, or 1 with `--strict` when anything failed |
+| Nothing at all: you'd rather click | [`machyon ui`](machyon-ui.md), a local app in your browser | a run folder with the images, `report.json` and a gallery |
 
 ## `download()`: one call
 

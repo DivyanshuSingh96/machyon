@@ -21,9 +21,11 @@ import hmac
 import itertools
 import logging
 import os
+import re
 import secrets
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -35,10 +37,12 @@ from aiohttp import web
 
 from .. import __version__
 from ..config import DownloadConfig
-from ..ledger import FailureLedger
+from ..diagnostics import hint
+from ..ledger import ROW_REASONS, FailureLedger, is_permanent
 from ..naming import BUILTIN_KEYS, NameTemplate, as_namer
 from ..planner import Planner
 from ..sources import inspect, iter_pairs, read_rows
+from ..utils import IMAGE_EXTS
 from .runs import SOURCE_EXTS, RunStore
 from .worker import Worker
 
@@ -51,6 +55,14 @@ JSON_LIMIT_MB = 50            # a plain .json manifest is parsed whole, so it ge
 PASTE_MAX_LINES = 100_000
 PREVIEW_ROWS = 20
 NAME_PREVIEW_ROWS = 8
+GALLERY_MAX = 24
+GALLERY_SAMPLE = 5000                     # files looked at to pick the gallery from
+GALLERY_EXTS = IMAGE_EXTS - {".svg"}      # an SVG can carry script, so it is never shown in the page
+FAILURES_MAX = 200
+IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif",
+               ".webp": "image/webp", ".bmp": "image/bmp", ".avif": "image/avif", ".tif": "image/tiff",
+               ".tiff": "image/tiff", ".ico": "image/x-icon", ".jfif": "image/jpeg", ".apng": "image/apng",
+               ".heic": "image/heic", ".heif": "image/heif", ".jxl": "image/jxl", ".svg": "image/svg+xml"}
 STAGED_TTL_S = 3600
 TOKEN_HEADER = "X-Machyon-Token"
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'; "
@@ -141,6 +153,14 @@ def redact_url(url: str) -> str:
     return f"{p.scheme}://{host}{p.path}" + (f"?{query}" if query else "")
 
 
+_URL_IN_TEXT = re.compile(r"""https?://[^\s'"<>()\[\]]+""")
+
+
+def redact_text(text):
+    """An error message safe to show: every URL in it redacted. Errors often repeat the URL, query string and all."""
+    return _URL_IN_TEXT.sub(lambda m: redact_url(m.group(0)), text) if isinstance(text, str) else text
+
+
 def check_paste(text: str) -> tuple[list[str], list[dict], int]:
     """(valid URLs, the first invalid lines, how many lines were invalid)."""
     urls, bad, n_bad, n = [], [], 0, 0
@@ -200,6 +220,72 @@ def preview_names(path: Path, url_col: str | None, names: str | None) -> list[di
     return out
 
 
+def walk_images(images: Path, limit: int | None = None, exts=IMAGE_EXTS):
+    """(relative path, size) of the image files under ``images``, in name order, never following a symlink."""
+    def walk(d):
+        try:
+            entries = sorted(os.scandir(d), key=lambda e: e.name)
+        except OSError:
+            return
+        subdirs = []
+        for e in entries:
+            if e.is_symlink():
+                continue
+            if e.is_dir(follow_symlinks=False):
+                subdirs.append(e.path)
+            elif os.path.splitext(e.name)[1].lower() in exts and e.is_file(follow_symlinks=False):
+                yield Path(e.path).relative_to(images).as_posix(), e.stat(follow_symlinks=False).st_size
+        for d2 in subdirs:
+            yield from walk(d2)
+    yield from itertools.islice(walk(images), limit)
+
+
+def failures_of(images: Path) -> dict:
+    entries = FailureLedger(images).read(legacy=False)
+    counts = {"retryable": 0, "permanent": 0, "row": 0}
+    rows = []
+    for e in entries:
+        reason = str(e.get("reason", "unknown"))
+        kind = "row" if reason in ROW_REASONS else "permanent" if is_permanent(reason) else "retryable"
+        n = len(e.get("names") or [None])
+        counts[kind] += n
+        if len(rows) < FAILURES_MAX:
+            rows.append({"url": redact_url(str(e.get("url", ""))), "names": e.get("names") or [], "reason": reason,
+                         "kind": kind, "error": redact_text(e.get("error")), "hint": hint(reason)})
+    return {"rows": rows, "total": sum(counts.values()), **counts}
+
+
+def remove_tree(folder: Path) -> None:
+    """Delete a run folder. Symlinks inside are removed, never followed; read-only files (Windows) are made
+    writable first."""
+    def writable(func, path, _exc):
+        os.chmod(path, 0o700)
+        func(path)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(folder, onexc=writable)
+    else:
+        shutil.rmtree(folder, onerror=writable)
+
+
+def open_folder(path: Path) -> bool:
+    """Show ``path`` in the system's file manager. False when this computer has none (a server, a container)."""
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)  # noqa: S606  a folder we created, opened by Explorer; no shell involved
+            return True
+        if sys.platform == "darwin":
+            opener = ["open"]
+        else:
+            if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")) or not shutil.which("xdg-open"):
+                return False
+            opener = ["xdg-open"]
+        subprocess.Popen([*opener, str(path)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except OSError:
+        return False
+
+
 # ------------------------------------------------------------------ the application
 
 class UI:
@@ -236,7 +322,8 @@ class UI:
     def run_summary(self, run: dict) -> dict:
         report = self.store.report(run["id"]) if run["status"] == "completed" else None
         if report:
-            report["failure_examples"] = {k: {**v, "url": v.get("url") and redact_url(v["url"])}
+            report["failure_examples"] = {k: {**v, "url": v.get("url") and redact_url(v["url"]),
+                                              "error": redact_text(v.get("error"))}
                                           for k, v in (report.get("failure_examples") or {}).items()}
         live = self.worker.status() if self.worker and self.worker.run_id == run["id"] and self.worker.running else None
         return {"id": run["id"], "created": run["created"], "status": run["status"], "source": run["source"],
@@ -410,6 +497,98 @@ class UI:
                                   "history": run["history"], "folder": str(self.store.path(run["id"])),
                                   "images": str(self.store.images(run["id"]))})
 
+    async def history(self, _request):
+        return web.json_response({"runs": [self.run_summary(r) for r in self.store.list()]})
+
+    def _run(self, request) -> dict:
+        return self.store.load(request.match_info["run_id"])
+
+    async def files(self, request: web.Request):
+        run = self._run(request)
+        images = self.store.images(run["id"])
+        found = await asyncio.to_thread(lambda: list(walk_images(images, GALLERY_SAMPLE, GALLERY_EXTS)))
+        # spread the 24 across what was found, so one folder (or one category) doesn't fill the gallery
+        step = max(1, len(found) / GALLERY_MAX)
+        shown = [found[int(i * step)] for i in range(min(GALLERY_MAX, len(found)))]
+        fails = await asyncio.to_thread(failures_of, images)
+        count = None
+        if request.query.get("count") == "1":   # how many images there are now: an interrupted run's real state
+            count = await asyncio.to_thread(lambda: sum(1 for _ in walk_images(images)))
+        return web.json_response({"images": [{"path": p, "size": n} for p, n in shown],
+                                  "more": len(found) > GALLERY_MAX, "on_disk": count, "failures": fails})
+
+    async def image(self, request: web.Request):
+        run = self._run(request)
+        images = self.store.images(run["id"]).resolve()
+        rel = request.query.get("path", "")
+        if not rel or "\x00" in rel or os.path.isabs(rel) or rel.startswith(("/", "\\")):
+            raise KeyError(rel)
+        target = (images / rel).resolve()      # resolves symlinks: one pointing outside fails the next check
+        if not target.is_relative_to(images) or target == images or not target.is_file():
+            raise KeyError(rel)
+        ctype = IMAGE_TYPES.get(target.suffix.lower())
+        if ctype is None or ctype == "image/svg+xml":   # SVG can carry script; it is never shown inline
+            raise KeyError(rel)
+        return web.FileResponse(target, headers={"Content-Type": ctype, "Cache-Control": "private, max-age=300",
+                                                 "Content-Disposition": "inline"})
+
+    async def report_file(self, request: web.Request):
+        run = self._run(request)
+        report = self.store.report(run["id"])
+        if report is None:
+            raise KeyError(run["id"])
+        return web.json_response(report, headers={
+            "Content-Disposition": f'attachment; filename="{run["id"]}-report.json"'})
+
+    async def retry(self, request: web.Request):
+        body = await _json(request)
+        run = self._run(request)
+        if self.busy():
+            return _error("A download is already running. Wait for it to finish, or stop it first.", 409)
+        include = body.get("include_permanent") is True
+        if include and body.get("confirm") is not True:
+            raise BadRequest("retrying permanent failures needs confirming")
+        fails = await asyncio.to_thread(failures_of, self.store.images(run["id"]))
+        if not fails["retryable"] and not (include and fails["permanent"]):
+            raise BadRequest("nothing to retry" + (": only permanent failures are left" if fails["permanent"] else ""))
+        self.worker = Worker(self.store, run, "retry", include_permanent=include)
+        return web.json_response({"run": run["id"]}, status=202)
+
+    async def resume(self, request: web.Request):
+        await _json(request)
+        run = self._run(request)
+        if self.busy():
+            return _error("A download is already running. Wait for it to finish, or stop it first.", 409)
+        if run["status"] not in ("interrupted", "cancelled", "error"):
+            raise BadRequest("only a run that didn't finish can be resumed")
+        if not self.store.source(run).is_file():
+            raise BadRequest("this run's manifest is missing from its source folder")
+        # Same manifest, names, settings and folder: files already on disk are skipped, the rest downloaded.
+        self.worker = Worker(self.store, run, "resume")
+        return web.json_response({"run": run["id"]}, status=202)
+
+    async def delete(self, request: web.Request):
+        body = await _json(request)
+        run = self._run(request)
+        if body.get("confirm") != run["id"]:
+            raise BadRequest("deleting a run needs confirming with its id")
+        if self.worker and self.worker.run_id == run["id"] and self.worker.running:
+            return _error("This run is downloading. Stop it first.", 409)
+        folder = self.store.path(run["id"])
+
+        await asyncio.to_thread(remove_tree, folder)
+        if self.worker and self.worker.run_id == run["id"]:
+            self.worker = None
+        return web.json_response({"deleted": run["id"]})
+
+    async def open(self, request: web.Request):
+        body = await _json(request)
+        run = self._run(request)
+        folder = self.store.images(run["id"]) if body.get("what") == "images" else self.store.path(run["id"])
+        if not await asyncio.to_thread(open_folder, folder):
+            return _error("This computer has no file manager to open; copy the path instead.", 501)
+        return web.json_response({"opened": str(folder)})
+
     async def job_status(self, _request):
         return web.json_response({"job": self.worker.status() if self.worker else None})
 
@@ -428,7 +607,15 @@ class UI:
         r.add_post("/api/sources/inspect", self.reinspect)
         r.add_post("/api/names", self.names)
         r.add_post("/api/runs", self.start)
+        r.add_get("/api/runs", self.history)
         r.add_get("/api/runs/{run_id}", self.run_detail)
+        r.add_get("/api/runs/{run_id}/files", self.files)
+        r.add_get("/api/runs/{run_id}/image", self.image)
+        r.add_get("/api/runs/{run_id}/report", self.report_file)
+        r.add_post("/api/runs/{run_id}/retry", self.retry)
+        r.add_post("/api/runs/{run_id}/resume", self.resume)
+        r.add_post("/api/runs/{run_id}/open", self.open)
+        r.add_delete("/api/runs/{run_id}", self.delete)
         r.add_get("/api/job", self.job_status)
         r.add_post("/api/job/stop", self.job_stop)
         r.add_static("/static/", STATIC, follow_symlinks=False, show_index=False)

@@ -18,7 +18,7 @@ from .runs import RunStore
 
 logger = logging.getLogger("machyon.ui")
 
-CHECKPOINT_S = 5.0   # how often a running job's progress is written to run.json
+CHECKPOINT_S = 2.0   # how often a running job's progress is written to run.json
 
 
 class Worker:
@@ -37,6 +37,7 @@ class Worker:
         self._task: asyncio.Task | None = None
         self._stop_as: str | None = None   # "cancelled" (the Stop button) or "interrupted" (the server is stopping)
         self._checkpoint = 0.0
+        self._before = run["status"]
         run["history"].append({"kind": kind, "started": self.started, "ended": None, "outcome": None})
         run["status"], run["error"] = "running", None
         store.save(run)
@@ -109,7 +110,7 @@ class Worker:
                 logger.warning(f"Could not save the report: {e}")
         # A retry that ends normally leaves the run as it was before (completed, or still resumable).
         if self.kind == "retry" and state == "completed":
-            run["status"] = "completed" if self.store.report(self.run_id) else "interrupted"
+            run["status"] = self._before
         else:
             run["status"] = state
         run["error"] = error
