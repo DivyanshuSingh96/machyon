@@ -1,6 +1,6 @@
 name: Lab and Cookbook
 
-# The Interactive Lab (recorder, analysis, validators, Live app) and the Cookbook projects. One Linux job: they
+# The Interactive Lab (recorder, analysis, validators, Live app), the Cookbook projects and the Colab notebook. One Linux job: they
 # don't need the 15-job matrix, and it only runs when they, the fake CDN or their browser code change.
 
 on:
@@ -9,6 +9,7 @@ on:
     paths:
       - "lab/**"
       - "examples/cookbook/**"
+      - "notebooks/**"
       - "tests/fakecdn.py"
       - "docs/assets/js/lab/**"
       - "docs/assets/lab/**"
@@ -17,6 +18,7 @@ on:
     paths:
       - "lab/**"
       - "examples/cookbook/**"
+      - "notebooks/**"
       - "tests/fakecdn.py"
       - "docs/assets/js/lab/**"
       - "docs/assets/lab/**"
@@ -36,6 +38,6 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: python -m pip install -e ".[dev]"
-      - run: ruff check lab examples/cookbook
-      - run: python -m pytest -q lab/tests examples/cookbook/tests
+      - run: python -m pip install -e ".[dev]" nbclient ipykernel
+      - run: ruff check lab examples/cookbook notebooks
+      - run: python -m pytest -q lab/tests examples/cookbook/tests notebooks/tests

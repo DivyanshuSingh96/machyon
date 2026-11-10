@@ -29,6 +29,11 @@ def events(c, after=0, **headers):
     return json.loads(body)
 
 
+# Windows' clock ticks every ~15.6 ms, so a server sleep of 0.4 s can measure as 0.39 s from the client. Lower bounds
+# allow one such tick (and a bit); a request that isn't delayed takes ~0.01 s, so the tests still tell them apart.
+TICK = 0.05
+
+
 def timed(c, path):
     t = time.monotonic()
     get(c, path)
@@ -194,12 +199,12 @@ def test_truncated_bodies_are_marked(cdn):
 def test_slow_ids_delay_only_the_first_request_by_default(cdn):
     c = cdn("--slow-ids", "5,8-9", "--slow-s", "0.6")
     first, second, other = timed(c, "/img/5.jpg"), timed(c, "/img/5.jpg"), timed(c, "/img/6.jpg")
-    assert first >= 0.6 and second < 0.4 and other < 0.4
+    assert first >= 0.6 - TICK and second < 0.4 and other < 0.4
 
 
 def test_slow_attempts_all_delays_every_request(cdn):
     c = cdn("--slow-ids", "5", "--slow-s", "0.4", "--slow-attempts", "all")
-    assert timed(c, "/img/5.jpg") >= 0.4 and timed(c, "/img/5.jpg") >= 0.4
+    assert timed(c, "/img/5.jpg") >= 0.4 - TICK and timed(c, "/img/5.jpg") >= 0.4 - TICK
 
 
 def test_parse_ids():

@@ -21,6 +21,8 @@ retries what can recover, keeps only real images, and tells you exactly what it 
   <a class="md-button" href="reliability/zero-lost/">The zero-lost contract</a>
 </div>
 
+<p class="mx-hackathon">No Python setup? <a href="https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb">Open Machyon in Google Colab</a>: paste links or upload a CSV, get a ZIP back.</p>
+
 <p class="mx-hackathon">In the Amazon ML Challenge? <a href="getting-started/amazon-ml-challenge/">Here's the one cell to paste</a>.</p>
 
 </section>
