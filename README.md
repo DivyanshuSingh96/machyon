@@ -17,9 +17,13 @@ It pulls any number of images from any server, tunes its own speed while it runs
 and <b>accounts for every file</b>: each one is downloaded, already on disk, or recorded with the reason it couldn't be.
 </p>
 
+<p align="center"><b>Documentation:</b> <a href="https://divyanshusingh96.github.io/machyon/">divyanshusingh96.github.io/machyon</a></p>
+
 ```bash
 pip install machyon
 ```
+
+Python 3.11 or newer, on Windows, macOS and Linux.
 
 ```python
 import machyon
@@ -151,6 +155,26 @@ async with machyon.Downloader("images/", headers={"Authorization": "Bearer …"}
 
 In Jupyter, FastAPI or any running event loop, use `await machyon.adownload(...)`.
 
+## Machyon UI
+
+```bash
+pip install machyon
+machyon ui
+```
+
+`machyon ui` opens Machyon in your browser as a local app. Paste image URLs or upload a CSV (or any other manifest
+Machyon reads), check the file names before you start, set the speed and retries, and choose the workspace folder
+where runs are saved. While it runs you see the real progress; afterwards, the report, every failure with its
+reason, and buttons to retry failures or resume an interrupted run.
+
+It runs on your own computer: the server listens only on `127.0.0.1`, and nothing leaves your machine except the
+image requests themselves. [Machyon UI guide](https://divyanshusingh96.github.io/machyon/getting-started/machyon-ui/)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DivyanshuSingh96/machyon/main/assets/machyon-ui-dark.webp">
+  <img alt="Machyon UI during a download: 831 of 3,000 rows done, with counts for downloaded, failed, data, speed, concurrency and requests in flight" src="https://raw.githubusercontent.com/DivyanshuSingh96/machyon/main/assets/machyon-ui-light.webp" width="100%">
+</picture>
+
 ## Inputs and filenames
 
 | Input | Example |
@@ -198,7 +222,7 @@ flowchart LR
     E --> M[MetricsEngine<br/>Report]
 ```
 
-The full design (algorithms, guarantees and the outcome table) is in [docs/ARCHITECTURE.md](https://github.com/DivyanshuSingh96/machyon/blob/main/docs/ARCHITECTURE.md). It's written language-neutral, because Machyon is coming to JavaScript next.
+The full design (algorithms, guarantees and the outcome table) is in [Architecture](https://divyanshusingh96.github.io/machyon/ARCHITECTURE/). It's written language-neutral, because Machyon is coming to JavaScript next.
 
 ## Class-based API
 
@@ -230,6 +254,8 @@ Machyon is fast, so please be a good citizen. Download only what you have the ri
 ## Roadmap
 
 - [x] Python library: adaptive concurrency, hedging, atomic writes, resume
+- [x] Local graphical UI (`machyon ui`)
+- [x] Google Colab notebook
 - [ ] **JavaScript / TypeScript** (`npm i machyon`), on the same architecture and the same fault-injection suite
 - [ ] Optional post-processing hooks (resize, convert, dedupe by perceptual hash)
 - [ ] WebDataset / Parquet shard output
@@ -243,11 +269,11 @@ Machyon is fast, so please be a good citizen. Download only what you have the ri
 
 **Does it work on Windows?** Yes. Filenames are made Windows-safe, and writes retry when antivirus or the search indexer briefly locks a file.
 
-**Can it download from pages instead of URL lists?** Not yet; v1 takes URL lists. Page and sitemap sources are on the roadmap.
+**Can it download all the images on a web page?** No. Machyon downloads the URLs you give it, from a file, a DataFrame or a Python list; it doesn't crawl websites or look for images on a page. Collect the image URLs first, then hand Machyon the list. Sitemap sources are on the roadmap.
 
 ## Contributing
 
-Bug reports, ideas and pull requests are very welcome; see [CONTRIBUTING.md](https://github.com/DivyanshuSingh96/machyon/blob/main/CONTRIBUTING.md). Running `pytest` covers 90+ tests in about two and a half minutes: fault injection against a fake CDN, plus every example in the documentation.
+Bug reports, ideas and pull requests are very welcome; see [CONTRIBUTING.md](https://github.com/DivyanshuSingh96/machyon/blob/main/CONTRIBUTING.md). Running `pytest` executes the complete test suite, including fault injection against a local fake CDN, Machyon UI job-lifecycle tests, and documentation example validation.
 
 ## Citing
 

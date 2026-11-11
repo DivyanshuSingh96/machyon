@@ -1,8 +1,27 @@
 {% extends "base.html" %}
 
+{#- One title for <title>, og:title and twitter:title. A page's `seo_title` front matter is used as written (it
+    already carries the brand); otherwise the theme's "{title} - Machyon". The homepage has no `seo_title` fallback
+    of its own, so it needs one; the 404 page has neither a title nor a canonical URL. -#}
+{%- macro mx_title() -%}
+  {%- set meta = page.meta or {} -%}
+  {%- if meta.seo_title -%}{{ meta.seo_title }}
+  {%- elif meta.title -%}{{ meta.title }} - {{ config.site_name }}
+  {%- elif page.title and page.url -%}{{ page.title | striptags }} - {{ config.site_name }}
+  {%- elif not page.canonical_url -%}Page not found - {{ config.site_name }}
+  {%- else -%}{{ config.site_name }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% block htmltitle %}
+  <title>{{ mx_title() | e }}</title>
+{% endblock %}
+
 {% block extrahead %}
+  {#- Search Console ownership (HTML-tag method) for https://divyanshusingh96.github.io/machyon/. -#}
+  <meta name="google-site-verification" content="eRLpDHbFuvuFv1DbACJxBL-dVZzBtzqf5azoMKgXZSM" />
   {#- Brand favicon set (BRAND.md): the .ico holds the 16/32 pixel masters; the SVG switches to a white body in
-      dark browser themes; the touch icon is the app icon. -#}
+      dark browser themes; the touch icon is the app icon. #}
   <link rel="icon" type="image/svg+xml" href="{{ 'assets/brand/favicon.svg' | url }}">
   <link rel="apple-touch-icon" href="{{ 'assets/brand/apple-touch-icon.png' | url }}">
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4F1EA">
@@ -10,14 +29,14 @@
   <link rel="preload" href="{{ 'assets/fonts/figtree-latin-wght-normal.woff2' | url }}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{{ 'assets/fonts/manrope-800.woff2' | url }}" as="font" type="font/woff2" crossorigin>
   {%- set mx_meta = page.meta or {} %}
-  {%- set mx_title = config.site_name if page.is_homepage else (mx_meta.title | d(page.title, true)) ~ " · " ~ config.site_name %}
-  {%- set mx_desc = mx_meta.description | d(config.site_description, true) %}
+  {%- set mx_head = mx_title() | e %}
+  {%- set mx_desc = mx_meta.description | d(config.site_description, true) | e %}
   {%- set mx_card = config.site_url ~ "assets/brand/social-card.png" %}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{ config.site_name }}">
-  <meta property="og:title" content="{{ mx_title }}">
+  <meta property="og:title" content="{{ mx_head }}">
   <meta property="og:description" content="{{ mx_desc }}">
-  {%- if page.canonical_url is defined and page.canonical_url %}
+  {%- if page.canonical_url %}
   <meta property="og:url" content="{{ page.canonical_url }}">
   {%- endif %}
   <meta property="og:image" content="{{ mx_card }}">
@@ -25,5 +44,26 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Machyon: every image, Mach speed, zero lost. Fast async image downloads for Python.">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ mx_head }}">
+  <meta name="twitter:description" content="{{ mx_desc }}">
   <meta name="twitter:image" content="{{ mx_card }}">
+  {#- BreadcrumbList from the navigation: the homepage, then each enclosing section that has its own index page
+      (a section without one has no URL to point at, so it is left out rather than linked to its first child),
+      then this page. Not on the homepage or the 404 page. -#}
+  {%- if page.url and page.canonical_url %}
+    {%- set ns = namespace(crumbs=[{"name": config.site_name, "url": config.site_url}]) %}
+    {%- for section in page.ancestors | reverse %}
+      {%- for child in section.children | selectattr("is_index") %}
+        {%- if loop.first and child.url != page.url %}
+          {%- set ns.crumbs = ns.crumbs + [{"name": section.title, "url": config.site_url ~ child.url}] %}
+        {%- endif %}
+      {%- endfor %}
+    {%- endfor %}
+    {%- set ns.crumbs = ns.crumbs + [{"name": page.title | striptags, "url": page.canonical_url}] %}
+    {%- set ns.items = [] %}
+    {%- for c in ns.crumbs %}
+      {%- set ns.items = ns.items + [{"@type": "ListItem", "position": loop.index, "name": c.name, "item": c.url}] %}
+    {%- endfor %}
+  <script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": ns.items} | tojson }}</script>
+  {%- endif %}
 {% endblock %}

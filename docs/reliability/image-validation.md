@@ -1,4 +1,5 @@
 ---
+seo_title: "Image validation: no error pages saved as .jpg · Machyon"
 description: How Machyon decides a response really is an image, which formats it recognises, and the limits of that check.
 ---
 

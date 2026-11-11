@@ -1,5 +1,5 @@
 ---
-description: Fix the common problems - 403s and HTML pages instead of images, certificate errors, timeouts, rate limits, proxies, Windows file locks - starting with machyon doctor.
+description: "Fix common download problems: 403s and HTML pages instead of images, certificate errors, timeouts, rate limits, proxies and Windows file locks."
 ---
 
 # Troubleshooting

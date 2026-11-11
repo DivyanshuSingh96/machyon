@@ -1,4 +1,5 @@
 ---
+seo_title: "Download images from CSV, JSONL or Parquet · Machyon"
 description: Every input Machyon reads - CSV, TSV, TXT, JSON, JSONL, Parquet, DataFrames and Python iterables - and how it finds the URL column.
 ---
 
@@ -38,6 +39,43 @@ machyon train.csv -o images/ --url-col image_link
 
 Values are stripped of surrounding whitespace. A row whose URL is empty or isn't `http(s)://` with a host is
 recorded as [`invalid_url`](../reference/failure-reasons.md#invalid-url), so it's never silently skipped.
+
+## CSV and TSV
+
+```text title="urls.csv"
+url,label
+https://example.com/photos/cat.jpg,cat
+https://example.com/photos/dog.jpg,dog
+```
+
+```python
+machyon.download("urls.csv", "images/", names="{label}/{hash}{ext}")
+```
+
+- **Header:** the first line names the columns, and every column can be used in a
+  [name template](naming.md). If the first line is already a URL, the file is read as having no header, and each
+  line's first cell that starts with `http` is its URL.
+- **Separator:** a `.tsv` file is always tab-separated. A `.csv` file is read as comma-separated unless its first
+  4 KB holds more tabs than commas.
+- **Encoding:** UTF-8, with or without the byte-order mark that Excel adds.
+- Blank lines are skipped, and a row with fewer cells than the header gets empty values for the rest.
+
+The file is read row by row, so its size doesn't matter.
+
+## JSON and JSON Lines
+
+```text title="urls.jsonl"
+{"url": "https://example.com/photos/cat.jpg", "label": "cat"}
+{"url": "https://example.com/photos/dog.jpg", "label": "dog"}
+```
+
+A `.jsonl` or `.ndjson` file holds one value per line: an object (a row with columns, like a CSV row), a URL
+string, or a `[url, filename]` pair. Blank lines are skipped, and the file is streamed, so it suits very long lists.
+
+A `.json` file is parsed whole. It can be a list of the same values, or an object holding exactly one such list,
+such as `{"images": [...]}`. For millions of rows, prefer JSON Lines.
+
+In both, the first value decides how the rest are read, so keep them all the same kind.
 
 ## Python iterables
 

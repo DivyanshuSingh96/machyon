@@ -1,4 +1,5 @@
 ---
+seo_title: "Resume interrupted image downloads · Machyon"
 description: Resume an interrupted run by running it again. How finished files are detected, how large files resume mid-file, and how warm starts work.
 ---
 

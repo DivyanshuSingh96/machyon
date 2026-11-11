@@ -1,3 +1,7 @@
+---
+description: "How Machyon works, independent of Python: its modules, how a row moves through them, and the contract a port to another language must honour."
+---
+
 # Machyon architecture
 
 This document describes Machyon independently of Python. It is the contract a port (for example the planned JavaScript/TypeScript version) must honour. A port is correct when it passes the same fault-injection suite (`tests/fakecdn.py` scenarios) with **zero lost, corrupt or bogus files**.

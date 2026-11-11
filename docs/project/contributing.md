@@ -1,4 +1,5 @@
 ---
+seo_title: "Contributing to Machyon"
 description: How to set up Machyon for development, the ground rules for changes, and how to report bugs.
 ---
 

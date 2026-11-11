@@ -1,4 +1,5 @@
 ---
+seo_title: "Install Machyon with pip · Machyon"
 description: Install Machyon with pip, add the optional extras for Parquet or a faster event loop, and check the install.
 ---
 

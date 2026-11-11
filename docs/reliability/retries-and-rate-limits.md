@@ -1,4 +1,5 @@
 ---
+seo_title: "Retries, HTTP 429 and Retry-After · Machyon"
 description: Which failures Machyon retries, the backoff schedule, how Retry-After and HTTP 429 are handled, and how stragglers are hedged.
 ---
 

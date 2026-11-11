@@ -1,7 +1,8 @@
 ---
 template: home.html
 title: Machyon
-description: Fast async image downloads for Python. Machyon tunes its own speed, retries what can recover, checks every file is a real image, and records a reason for anything it couldn't download.
+seo_title: "Machyon: Fast Async Image Downloader for Python"
+description: A Python image downloader for large URL lists. It tunes its own concurrency, honours rate limits, keeps only real images, resumes, and records every failure.
 hide:
   - navigation
   - toc
@@ -13,8 +14,8 @@ hide:
 
 <h1 class="mx-tagline">Every image. Mach speed. Zero lost.</h1>
 
-<p class="mx-descriptor">Fast async image downloads for Python. Hand Machyon a list of URLs and it tunes its own speed,
-retries what can recover, keeps only real images, and tells you exactly what it couldn't get.</p>
+<p class="mx-descriptor">Machyon is a fast async image downloader for Python. Hand it a list of URLs and it tunes its own
+speed, retries what can recover, keeps only real images, and tells you exactly what it couldn't get.</p>
 
 <div class="mx-cta">
   <a class="md-button md-button--primary" href="getting-started/quickstart/">Get started</a>
@@ -96,8 +97,9 @@ CSV, TSV, TXT, JSON, JSONL, Parquet, pandas or polars DataFrames, or a plain Pyt
 </div>
 
 <div class="mx-card" markdown>
-### Sync, async or CLI
-One call from a script or notebook, `await` inside your async app, or the `machyon` command.
+### Script, terminal or browser
+One call from a script or notebook, `await` inside your async app, the `machyon` command, or `machyon ui` in your
+browser.
 [Choosing an interface](getting-started/choosing-an-interface.md)
 </div>
 
