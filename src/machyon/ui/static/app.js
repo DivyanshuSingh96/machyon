@@ -814,6 +814,9 @@ function liveCard(id, job) {
   const meter = h("div", { class: "meter", role: "progressbar", "aria-label": "Rows accounted for" });
   const legend = h("div", { class: "legend" });
   const stats = h("div", { class: "stats" });
+  // run.json couldn't be written: say so, rather than let the page imply the progress is safely recorded.
+  const saveText = h("div");
+  const saveNote = h("div", { class: "note warn", role: "status", hidden: true }, icon("warn"), saveText);
   const spark = document.createElementNS(SVG, "svg");
   spark.setAttribute("class", "spark");
   spark.setAttribute("viewBox", "0 0 300 64");
@@ -842,6 +845,9 @@ function liveCard(id, job) {
 
   function draw(job) {
     stopBtn.disabled = !!job.stopping;
+    saveNote.hidden = !job.save_error;
+    saveText.textContent = job.save_error ? `${job.save_error} The download goes on; files on disk are complete, and if ` +
+      "Machyon UI stops now, resuming checks what is already there." : "";
     if (job.state === "starting") {
       phase.textContent = job.stopping ? "Cancelling: the download is still starting, and it won't begin." : "Starting…";
       big.replaceChildren("0"); meter.classList.add("unknown"); meter.replaceChildren(h("i"));
@@ -901,7 +907,7 @@ function liveCard(id, job) {
 
   return h("section", { class: "card" },
     h("div", { class: "card-head" }, h("h2", { class: "grow", text: "Progress" }), stopBtn),
-    phase, big, meter, legend, h("div", null, h("p", { class: "faint", text: "Images per second, as it goes" }), spark), stats,
+    phase, saveNote, big, meter, legend, h("div", null, h("p", { class: "faint", text: "Images per second, as it goes" }), spark), stats,
     h("p", { class: "faint", text: "You can close this tab: the download keeps going until it finishes or you stop Machyon UI." }));
 }
 

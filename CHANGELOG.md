@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-11
+## 1.2.0 (2026-11-11)
 
 **Added**
 - **`machyon ui` lets you choose the workspace**, the folder every run is saved in. The home page and the New download page show it with **Change folder** and **Copy path**. Change folder opens your system's folder dialog (Tkinter, in a separate process, so it never holds up the app) or takes a typed path. Machyon checks the folder first and shows where the runs will really be written: a missing drive, a folder it can't write to, a name Windows doesn't allow, a file, a folder inside a run or one another `machyon ui` is using are refused with the reason, and a new folder is created only after you confirm. The new folder is locked and opened before the old one is let go, so a failed change leaves everything as it was; it can't happen during a download, and waits for a deletion already under way. Runs are never moved: each stays in the workspace it was made in.
@@ -8,6 +8,10 @@
 - If the remembered workspace is unavailable at launch (an external drive that isn't connected, say), the home page and the terminal say so and name the temporary folder, `~/machyon-downloads`, and nothing is downloaded there until you confirm it. The remembered choice is kept, and used again once the drive is back.
 - Links or a manifest added on the New download page survive a change of workspace: uploads now wait in a staging folder of their own, outside every workspace, and are copied into the run when the download starts, then read back and checked against the upload before the staged copy is removed.
 - **Referer** in `machyon ui`, for sites that only serve images to their own pages: under *Advanced* when starting a download, and on the Failures card when a site refused the images (403) or sent something that isn't an image. A retry with a new Referer retries those rows too, without the confirmation other permanent failures need, and the run keeps it for later retries and resumes. Failure hints in the app name this setting instead of the command-line flag.
+
+**Changed**
+- **`machyon ui` saves a running download's progress from a background thread**, instead of from the download's own event loop, so a slow disk, a network drive or an antivirus scan holding `run.json` no longer holds up the downloads. Measured on Linux (2 CPUs) with 20,000 images from the local test server, median of three runs: with every write slowed by 1 second, 790 → 1,799 images/s, and the download loop's worst delay 1.09 s → 0.08 s; with the disk as it is, no measurable difference (1,855 and 1,901 images/s). Windows, where antivirus scanning makes writes slow, wasn't measured yet: `tools/bench_ui_checkpoints.py` measures it on any computer.
+- Progress is saved at most every 2 seconds and only when it has changed (a stalled download no longer rewrites `run.json`), and at once when the final retry sweep begins. One write at a time, with no queue: only the newest progress waits, and older progress can never be written after newer. The final state is written after the last progress save has finished, so it is never overwritten by one. A save that fails is shown on the run's page while it runs, instead of only in the terminal.
 
 ## 1.1.1 (2026-11-11)
 
