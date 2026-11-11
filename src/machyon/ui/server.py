@@ -24,10 +24,12 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import webbrowser
 from pathlib import Path
@@ -93,6 +95,48 @@ class TooLarge(Exception):
     def __init__(self, limit: int) -> None:
         super().__init__(limit)
         self.limit = limit
+
+
+class Refused(Exception):
+    """An action that can't happen now: 409 when something else holds what it needs, 503 while shutting down."""
+
+    def __init__(self, message: str, status: int = 409) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+BUSY = "A download is already running. Wait for it to finish, or stop it first."
+CLOSING = "Machyon UI is shutting down."
+WAIT_NOTICE_S = 10.0   # while shutdown waits for a download to stop, how often the terminal says so
+
+
+class JobReservation:
+    """The one job slot. A download, retry or resume takes it synchronously, before its first await, and only its
+    own lifecycle gives it back: a failed start, or the worker thread having really ended. A request that goes away
+    never frees it, and an older job's ending can never free a newer one's (``UI.release`` checks identity)."""
+
+    __slots__ = ("id", "kind", "run_id", "state", "worker", "stop_as")
+
+    def __init__(self, rid: int, kind: str, run_id: str | None) -> None:
+        self.id, self.kind, self.run_id = rid, kind, run_id
+        self.state = "starting"            # starting -> running -> ended
+        self.worker: Worker | None = None
+        self.stop_as: str | None = None    # Stop (or shutdown) pressed; kept until the worker exists to receive it
+
+    def stop(self, why: str) -> None:
+        self.stop_as = self.stop_as or why
+        if self.worker is not None:
+            self.worker.stop(why)
+
+    @property
+    def active(self) -> bool:
+        return self.state == "starting" or (self.worker is not None and self.worker.running)
+
+    def status(self) -> dict:
+        if self.worker is None:
+            return {"run_id": self.run_id, "kind": self.kind, "state": "starting", "error": None,
+                    "stopping": self.stop_as is not None, "progress": None}
+        return self.worker.status()
 
 
 UI_KEY: web.AppKey = web.AppKey("ui", object)
@@ -294,18 +338,92 @@ class UI:
         self.port = port
         self.token = token
         self.max_upload = max_upload_mb * 1024 * 1024
-        self.worker: Worker | None = None
+        self.reservation: JobReservation | None = None   # the job slot (see JobReservation)
+        self.last: Worker | None = None                  # the latest job that has ended, for its final status
+        self.deleting: set[str] = set()                  # runs whose folders are being removed right now
+        self.closing = False                             # shutdown has begun: no new jobs or deletions
+        self._ids = itertools.count(1)
+        self._tasks: set[asyncio.Task] = set()           # starts, deletions and watchers: shutdown waits for all
         self.staged: dict[str, dict] = {}
         self.hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
         self.origins = {f"http://{h}" for h in self.hosts}
 
     # ---- helpers
 
-    def job(self) -> Worker | None:
-        return self.worker
-
     def busy(self) -> bool:
-        return self.worker is not None and self.worker.running
+        """A job holds the slot, from the moment it was accepted until its worker thread has ended."""
+        return self.reservation is not None
+
+    def job_snapshot(self) -> dict | None:
+        if self.reservation is not None:
+            return self.reservation.status()
+        return self.last.status() if self.last is not None else None
+
+    def reserve(self, kind: str, run_id: str | None = None) -> JobReservation:
+        """Take the job slot. Synchronous on purpose: between the check and the claim nothing else can run."""
+        if self.closing:
+            raise Refused(CLOSING, 503)
+        if self.reservation is not None:
+            raise Refused(BUSY)
+        if run_id is not None and run_id in self.deleting:
+            raise Refused("This run is being deleted.")
+        self.reservation = JobReservation(next(self._ids), kind, run_id)
+        return self.reservation
+
+    def release(self, res: JobReservation) -> None:
+        if self.reservation is res:
+            self.reservation = None
+        if res.worker is not None:
+            self.last = res.worker
+        res.state = "ended"
+
+    def spawn(self, coro) -> asyncio.Task:
+        """Run ``coro`` as a task the UI owns: a request that goes away can't cancel it halfway, and shutdown waits
+        for it. Handlers await it through ``asyncio.shield``."""
+        task = asyncio.get_running_loop().create_task(coro)
+        self._tasks.add(task)
+        task.add_done_callback(_owned_done)
+        task.add_done_callback(self._tasks.discard)
+        return task
+
+    async def launch(self, res: JobReservation, prepare) -> str:
+        """Carry a reserved job through its start. ``prepare`` runs in a thread (it creates or reloads the run,
+        checks it and records it as running) and returns the Worker. The slot is given back if anything fails."""
+        try:
+            worker = await asyncio.to_thread(prepare)
+        except BaseException:
+            self.release(res)
+            raise
+        res.worker, res.run_id = worker, worker.run_id
+        if res.stop_as:                     # Stop pressed while starting: it ends without sending a request
+            worker.stop(res.stop_as)
+        try:
+            worker.start()
+        except BaseException as e:          # no thread: record the outcome so the run isn't left "running"
+            try:
+                await asyncio.to_thread(worker.abandon, f"The download could not start: {e}")
+            finally:
+                self.release(res)
+            raise
+        res.state = "running"
+        self.spawn(self._watch(res))
+        return worker.run_id
+
+    async def _watch(self, res: JobReservation) -> None:
+        await asyncio.to_thread(res.worker.thread.join)   # the thread has really ended, its last write done
+        self.release(res)
+
+    async def shutdown(self, notice=None) -> None:
+        """Refuse new jobs and deletions, stop the job (even one still starting), and return only once its worker
+        thread has ended and every task the UI owns has finished. No time limit: the folder lock must outlive the
+        worker. ``notice()`` is called every WAIT_NOTICE_S seconds while it waits."""
+        self.closing = True
+        if self.reservation is not None:
+            self.reservation.stop("interrupted")
+        while self._tasks:
+            done, _ = await asyncio.wait(set(self._tasks), timeout=WAIT_NOTICE_S)
+            if not done and notice is not None:
+                notice()
 
     def staged_source(self, sid) -> dict:
         self._expire_staged()
@@ -325,7 +443,8 @@ class UI:
             report["failure_examples"] = {k: {**v, "url": v.get("url") and redact_url(v["url"]),
                                               "error": redact_text(v.get("error"))}
                                           for k, v in (report.get("failure_examples") or {}).items()}
-        live = self.worker.status() if self.worker and self.worker.run_id == run["id"] and self.worker.running else None
+        w = self.reservation.worker if self.reservation is not None else None
+        live = w.status() if w is not None and w.run_id == run["id"] and w.running else None
         return {"id": run["id"], "created": run["created"], "status": run["status"], "source": run["source"],
                 "names": run["names"], "progress": (live or {}).get("progress") or run.get("progress"),
                 "report": report, "error": run.get("error")}
@@ -373,6 +492,8 @@ class UI:
             resp = await handler(request)
         except BadRequest as e:
             resp = _error(str(e), 400)
+        except Refused as e:
+            resp = _error(str(e), e.status)
         except TooLarge as e:
             resp = _error(f"That's more than {e.limit / 1048576:g} MB, the limit for this kind of file.", 413)
         except KeyError:
@@ -399,7 +520,7 @@ class UI:
             "builtin_keys": sorted(BUILTIN_KEYS),
             "limits": {"upload_mb": self.max_upload // 1048576, "json_mb": min(JSON_LIMIT_MB, self.max_upload // 1048576),
                        "paste_lines": PASTE_MAX_LINES, "formats": list(SOURCE_EXTS)},
-            "job": self.worker.status() if self.worker else None,
+            "job": self.job_snapshot(),
             "recent": [self.run_summary(r) for r in runs[:6]], "runs": len(runs)})
 
     # ---- sources
@@ -477,19 +598,36 @@ class UI:
 
     async def start(self, request: web.Request):
         body = await _json(request)
-        if self.busy():
-            return _error("A download is already running. Wait for it to finish, or stop it first.", 409)
-        s = self.staged_source(body.get("source"))
+        sid = body.get("source")
+        s = self.staged_source(sid)
         if s.get("url_col") is None and s.get("columns"):
             raise BadRequest("choose the column that holds the image links")
         names = validate_template(body.get("names"), s.get("columns"))
         settings = validate_settings(body.get("settings", {}))
-        self.staged.pop(body["source"])
+        res = self.reserve("download")
+        self.staged.pop(sid)   # this start owns the staged manifest now (and nothing can expire it meanwhile)
         source = {"kind": "paste" if s["name"] is None else "upload", "original_name": s["name"],
                   "format": s["format"], "url_col": s.get("url_col"), "size": s["size"]}
-        run = await asyncio.to_thread(self.store.create, s["path"], source, settings, names)
-        self.worker = Worker(self.store, run, "download")
-        return web.json_response({"run": run["id"]}, status=202)
+
+        def prepare() -> Worker:
+            return _ready(Worker(self.store, self.store.create(s["path"], source, settings, names), "download"))
+
+        async def go() -> str:
+            try:
+                return await self.launch(res, prepare)
+            except BaseException:
+                if s["path"].is_file():    # the run wasn't made and the manifest is back in staging: keep it
+                    self.staged[sid] = s
+                raise
+        return await self._accepted(go())
+
+    async def _accepted(self, coro) -> web.Response:
+        """Start a reserved job as a task the UI owns and answer 202 with its run once the worker exists."""
+        try:
+            run_id = await asyncio.shield(self.spawn(coro))
+        except (OSError, RuntimeError) as e:   # the disk refused the run's files, or no thread could be started
+            return _error(f"The download couldn't start: {getattr(e, 'strerror', None) or e}", 500)
+        return web.json_response({"run": run_id}, status=202)
 
     async def run_detail(self, request: web.Request):
         run = self.store.load(request.match_info["run_id"])
@@ -542,44 +680,64 @@ class UI:
 
     async def retry(self, request: web.Request):
         body = await _json(request)
-        run = self._run(request)
-        if self.busy():
-            return _error("A download is already running. Wait for it to finish, or stop it first.", 409)
+        rid = self._run(request)["id"]
         include = body.get("include_permanent") is True
         if include and body.get("confirm") is not True:
             raise BadRequest("retrying permanent failures needs confirming")
-        fails = await asyncio.to_thread(failures_of, self.store.images(run["id"]))
-        if not fails["retryable"] and not (include and fails["permanent"]):
-            raise BadRequest("nothing to retry" + (": only permanent failures are left" if fails["permanent"] else ""))
-        self.worker = Worker(self.store, run, "retry", include_permanent=include)
-        return web.json_response({"run": run["id"]}, status=202)
+        res = self.reserve("retry", rid)
+
+        def prepare() -> Worker:
+            run = self.store.load(rid)    # read again now that this job owns it
+            fails = failures_of(self.store.images(rid))
+            if not fails["retryable"] and not (include and fails["permanent"]):
+                raise BadRequest("nothing to retry" + (": only permanent failures are left" if fails["permanent"] else ""))
+            return _ready(Worker(self.store, run, "retry", include_permanent=include))
+        return await self._accepted(self.launch(res, prepare))
 
     async def resume(self, request: web.Request):
         await _json(request)
-        run = self._run(request)
-        if self.busy():
-            return _error("A download is already running. Wait for it to finish, or stop it first.", 409)
-        if run["status"] not in ("interrupted", "cancelled", "error"):
-            raise BadRequest("only a run that didn't finish can be resumed")
-        if not self.store.source(run).is_file():
-            raise BadRequest("this run's manifest is missing from its source folder")
-        # Same manifest, names, settings and folder: files already on disk are skipped, the rest downloaded.
-        self.worker = Worker(self.store, run, "resume")
-        return web.json_response({"run": run["id"]}, status=202)
+        rid = self._run(request)["id"]
+        res = self.reserve("resume", rid)
+
+        def prepare() -> Worker:
+            run = self.store.load(rid)
+            if run["status"] not in ("interrupted", "cancelled", "error"):
+                raise BadRequest("only a run that didn't finish can be resumed")
+            if not self.store.source(run).is_file():
+                raise BadRequest("this run's manifest is missing from its source folder")
+            # Same manifest, names, settings and folder: files already on disk are skipped, the rest downloaded.
+            return _ready(Worker(self.store, run, "resume"))
+        return await self._accepted(self.launch(res, prepare))
 
     async def delete(self, request: web.Request):
         body = await _json(request)
-        run = self._run(request)
-        if body.get("confirm") != run["id"]:
+        rid = self._run(request)["id"]
+        if body.get("confirm") != rid:
             raise BadRequest("deleting a run needs confirming with its id")
-        if self.worker and self.worker.run_id == run["id"] and self.worker.running:
-            return _error("This run is downloading. Stop it first.", 409)
-        folder = self.store.path(run["id"])
+        # Checked and claimed with no await in between, like the job slot: a retry or resume of this run is refused
+        # from here on, and this run can't be deleted while a job owns it.
+        if self.closing:
+            raise Refused(CLOSING, 503)
+        if self.reservation is not None and self.reservation.run_id == rid:
+            raise Refused("This run is downloading. Stop it first.")
+        if rid in self.deleting:
+            raise Refused("This run is already being deleted.")
+        self.deleting.add(rid)
+        folder = self.store.path(rid)
 
-        await asyncio.to_thread(remove_tree, folder)
-        if self.worker and self.worker.run_id == run["id"]:
-            self.worker = None
-        return web.json_response({"deleted": run["id"]})
+        async def go() -> None:
+            try:
+                await asyncio.to_thread(remove_tree, folder)
+            finally:
+                self.deleting.discard(rid)
+            if self.last is not None and self.last.run_id == rid:
+                self.last = None
+        try:
+            await asyncio.shield(self.spawn(go()))
+        except OSError as e:
+            return _error(f"Some of this run's files couldn't be deleted: {e.strerror or e}. "
+                          "Close any program using them and try again.", 500)
+        return web.json_response({"deleted": rid})
 
     async def open(self, request: web.Request):
         body = await _json(request)
@@ -590,13 +748,14 @@ class UI:
         return web.json_response({"opened": str(folder)})
 
     async def job_status(self, _request):
-        return web.json_response({"job": self.worker.status() if self.worker else None})
+        return web.json_response({"job": self.job_snapshot()})
 
     async def job_stop(self, _request):
-        if not self.busy():
+        res = self.reservation
+        if res is None or not res.active:
             return _error("nothing is running", 409)
-        self.worker.stop("cancelled")
-        return web.json_response({"job": self.worker.status()})
+        res.stop("cancelled")   # while starting, kept until the worker exists: it then ends before any request
+        return web.json_response({"job": res.status()})
 
     def routes(self, app: web.Application) -> None:
         r = app.router
@@ -619,6 +778,25 @@ class UI:
         r.add_get("/api/job", self.job_status)
         r.add_post("/api/job/stop", self.job_stop)
         r.add_static("/static/", STATIC, follow_symlinks=False, show_index=False)
+
+
+def _ready(worker: Worker) -> Worker:
+    """Record ``worker``'s run as running (blocking). If that fails, try to record the failure instead, so the run
+    isn't left marked as running by a job that never started."""
+    try:
+        worker.prepare()
+    except BaseException as e:
+        try:
+            worker.abandon(f"The download could not start: {e}")
+        except BaseException:   # noqa: BLE001  the disk is refusing writes; the next launch marks it interrupted
+            pass
+        raise
+    return worker
+
+
+def _owned_done(task: asyncio.Task) -> None:
+    if not task.cancelled():
+        task.exception()   # retrieved: the request that started it reports it, or that request is gone
 
 
 def _error(message: str, status: int) -> web.Response:
@@ -697,24 +875,53 @@ class RootLock:
         self.f.close()
 
 
-async def _run(app: web.Application, sock: socket.socket, url: str, open_browser: bool) -> None:
+class Interrupts:
+    """Ctrl+C handling for ``serve``. The first press asks for a graceful stop (``_run`` waits for the download to
+    end); a second one leaves at once. A Python thread can't be killed on its own, so that is a process exit: the
+    folder lock is never released by hand while a worker may still be writing, the operating system releases it with
+    the process, and the next launch records the run as interrupted, so it can be resumed."""
+
+    def __init__(self, exit=os._exit) -> None:
+        self.presses = 0
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.stop: asyncio.Event | None = None
+        self._exit = exit
+
+    def __call__(self, _signum=None, _frame=None) -> None:
+        self.presses += 1
+        if self.presses == 1:
+            if self.loop is None:                  # not serving yet: nothing to wait for
+                raise KeyboardInterrupt
+            self.loop.call_soon_threadsafe(self.stop.set)
+            return
+        print("\n  Quitting now. A download that was running is listed as interrupted next time, ready to resume.",
+              flush=True)
+        self._exit(130)
+
+
+async def _run(app: web.Application, sock: socket.socket, url: str, open_browser: bool,
+               interrupts: Interrupts | None = None) -> None:
+    ui = app[UI_KEY]
+    stop = asyncio.Event()
+    if interrupts is not None:
+        interrupts.loop, interrupts.stop = asyncio.get_running_loop(), stop
     runner = web.AppRunner(app, access_log=None, handle_signals=False, shutdown_timeout=1)
     await runner.setup()
     await web.SockSite(runner, sock).start()
     print(f"\n  Machyon UI is running at {url}\n"
           "  (the link includes this session's key: open it, don't share it)\n"
-          f"  Runs are saved in {app[UI_KEY].store.root}\n"
+          f"  Runs are saved in {ui.store.root}\n"
           "  Press Ctrl+C to stop.\n", flush=True)
     if open_browser and not await asyncio.to_thread(_open, url):
         print("  No browser could be opened here: copy the link above into one.\n", flush=True)
     try:
-        await asyncio.Event().wait()
+        await stop.wait()
     finally:
-        ui = app[UI_KEY]
+        # The page keeps being served while the download stops, so it can show that; new jobs get 503.
         if ui.busy():
             print("  Stopping the download; every file on disk stays complete...", flush=True)
-            ui.worker.stop("interrupted")
-            await asyncio.to_thread(ui.worker.thread.join, 30)
+        await ui.shutdown(lambda: print("  Still waiting for the download to stop. Press Ctrl+C again to quit "
+                                        "at once (it can be resumed next time).", flush=True))
         await runner.cleanup()
 
 
@@ -744,6 +951,7 @@ def serve(output_dir: str = DEFAULT_OUTPUT, port: int | None = None, open_browse
         print(f"machyon ui: another Machyon UI is already using {store.root}.\n"
               "  Use that one, stop it, or start this one with a different --output-dir.", file=sys.stderr)
         return 1
+    app = None
     try:
         try:
             sock = bind(port)
@@ -762,12 +970,21 @@ def serve(output_dir: str = DEFAULT_OUTPUT, port: int | None = None, open_browse
         app = make_app(store, actual, token, max_upload_mb)
         url = f"http://127.0.0.1:{actual}/#token={token}"
         logging.getLogger("aiohttp.access").disabled = True
+        interrupts = Interrupts()
+        main_thread = threading.current_thread() is threading.main_thread()
+        previous = signal.signal(signal.SIGINT, interrupts) if main_thread else None
         try:
-            asyncio.run(_run(app, sock, url, open_browser))
+            asyncio.run(_run(app, sock, url, open_browser, interrupts))
         except KeyboardInterrupt:
             pass
+        finally:
+            if main_thread:
+                signal.signal(signal.SIGINT, previous)
         print("  Machyon UI stopped.")
         return 0
     finally:
         shutil.rmtree(store.staging, ignore_errors=True)
-        lock.release()
+        # Normally reached only after the worker has ended (a second Ctrl+C leaves through os._exit instead). If a
+        # job still holds the slot, the lock stays held and the operating system releases it with the process.
+        if app is None or not app[UI_KEY].busy():
+            lock.release()

@@ -2,6 +2,14 @@
 
 ## 2026-11-11
 
+**Fixed**
+- **`machyon ui` runs exactly one job at a time, and never loses track of it.** Two downloads started at the same moment were both accepted: two runs and two download threads, and Stop and Ctrl+C reached only one of them, while the page said nothing was running. The same happened with a download and a retry or resume, and with two clicks on Retry, which put two downloads into the same run folder. A job now takes the server's single job slot before anything else happens and keeps it until its download thread has really ended; every competing start, retry or resume is answered 409, whichever arrives first.
+- Stop pressed while a download was still starting was answered "nothing is running", and the download then began anyway. It is now kept, and the job ends before sending a single request: a new download is recorded as cancelled, and a retry or resume leaves its run as it was.
+- Deleting a run while it was being resumed could leave it half deleted, with the download still writing into it. A run being deleted can't be resumed, retried or deleted twice, and a run with a job can't be deleted; other finished runs can still be deleted during a download.
+- Ctrl+C now waits for the download to stop, however long it takes, and only then releases the output folder. Before, it waited at most 30 seconds, and a download accepted during that wait was never stopped at all. New downloads, retries, resumes and deletions are refused (503) while it stops. A second Ctrl+C quits at once; the run is then listed as interrupted at the next launch, ready to resume, and any half-written `run.json` copy is removed.
+- A failed start (a full disk, say) no longer leaves a half-made run folder behind or a run marked as running: the uploaded manifest goes back to waiting, so the same download can be started again.
+- Starting, retrying and resuming no longer write and flush `run.json` on the web server's own thread, which could stall the page briefly on Windows. The Retry, Resume and Delete buttons are disabled while their request is on its way.
+
 **Documentation**
 - The homepage has an arrival: Opa flies in from far behind the page toward the visitor, banks across the screen, turns above the "n" and curls into the logo, about 14.5 seconds in all. It plays once per visit (again after a reload), only on the homepage, never with reduced motion or the data saver, and never blocks the page: it takes no clicks, "Skip intro" or Esc ends it, and leaving the page removes it. Its 230 KB (compressed) download happens only when it plays. Without WebGL2 the logo simply appears as before.
 - The text column is centred whenever no sidebar sits beside it. Between about 800 and 1,220 px wide, pages hugged the left edge and left an empty strip on the right where the contents would go; the breadcrumb follows the column.

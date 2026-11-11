@@ -22,6 +22,10 @@ CHECKPOINT_S = 2.0   # how often a running job's progress is written to run.json
 
 
 class Worker:
+    """One download, retry or resume. Building it does no I/O: ``prepare()`` (blocking, off the server's loop) records
+    the run as running, then ``start()`` starts the thread. ``stop()`` may come at any point, even before ``start()``:
+    a worker stopped before its loop exists ends at once, without sending a single request."""
+
     def __init__(self, store: RunStore, run: dict, kind: str, include_permanent: bool = False) -> None:
         assert kind in ("download", "resume", "retry")
         self.store = store
@@ -37,12 +41,22 @@ class Worker:
         self._task: asyncio.Task | None = None
         self._stop_as: str | None = None   # "cancelled" (the Stop button) or "interrupted" (the server is stopping)
         self._checkpoint = 0.0
-        self._before = run["status"]
-        run["history"].append({"kind": kind, "started": self.started, "ended": None, "outcome": None})
-        run["status"], run["error"] = "running", None
-        store.save(run)
+        self._before = run["status"], run.get("error")   # restored if the job ends before doing anything
         self.thread = threading.Thread(target=self._work, name="machyon-ui-download", daemon=True)
+
+    def prepare(self) -> None:
+        """Record the run as running, with a new history entry. Blocking: call it from a thread."""
+        run = self.run
+        run["history"].append({"kind": self.kind, "started": self.started, "ended": None, "outcome": None})
+        run["status"], run["error"] = "running", None
+        self.store.save(run)
+
+    def start(self) -> None:
         self.thread.start()
+
+    def abandon(self, error: str) -> None:
+        """The thread could not be started: record the run's outcome instead. Blocking: call it from a thread."""
+        self._finish("error", None, error)
 
     @property
     def run_id(self) -> str:
@@ -60,8 +74,8 @@ class Worker:
     async def _main(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._task = asyncio.current_task()
-        if self._stop_as:                      # stopped before the loop existed
-            self._finish(self._stop_as, None, None)
+        if self._stop_as:                      # stopped before the loop existed: not one request is sent
+            self._finish(self._stop_as, None, None, untouched=True)
             return
         run = self.run
         try:
@@ -90,36 +104,40 @@ class Worker:
             self.run["progress"] = _snap_dict(snap)
             try:
                 self.store.save(self.run)
-            except OSError as e:
-                logger.warning(f"Could not save a progress checkpoint: {e}")
+            except (OSError, KeyError) as e:
+                logger.warning(f"Could not save a progress checkpoint: {e!r}")
 
-    def _finish(self, state: str, report, error: str | None) -> None:
+    def _finish(self, state: str, report, error: str | None, untouched: bool = False) -> None:
+        """Write the outcome to run.json (and report.json), then publish it. The state is published even when the
+        disk refuses the write, so the server never mistakes a finished job for a running one."""
         run = self.run
-        with self.lock:
-            snap = self.snapshot
-        if snap is not None:
-            run["progress"] = _snap_dict(snap)
-        entry = run["history"][-1]
-        entry["ended"], entry["outcome"] = time.time(), state
-        if report is not None:
-            entry["report"] = report.to_dict()
-        if report is not None and self.kind != "retry":
-            try:
-                self.store.save_report(self.run_id, report.to_dict())
-            except OSError as e:
-                logger.warning(f"Could not save the report: {e}")
-        # A retry that ends normally leaves the run as it was before (completed, or still resumable).
-        if self.kind == "retry" and state == "completed":
-            run["status"] = self._before
-        else:
-            run["status"] = state
-        run["error"] = error
         try:
-            self.store.save(run)
-        except OSError as e:
-            logger.error(f"Could not save {self.run_id}/run.json: {e}")
-        with self.lock:
-            self.state, self.error = state, error
+            with self.lock:
+                snap = self.snapshot
+            if snap is not None:
+                run["progress"] = _snap_dict(snap)
+            entry = run["history"][-1]
+            entry["ended"], entry["outcome"] = time.time(), state
+            if report is not None:
+                entry["report"] = report.to_dict()
+            if report is not None and self.kind != "retry":
+                try:
+                    self.store.save_report(self.run_id, report.to_dict())
+                except (OSError, KeyError) as e:
+                    logger.warning(f"Could not save the report: {e!r}")
+            # A retry that ends normally leaves the run as it was before (completed, or still resumable), and so does a
+            # retry or resume stopped before it sent a single request. A new download stopped that early is cancelled.
+            if (self.kind == "retry" and state == "completed") or (untouched and self.kind != "download"):
+                run["status"], run["error"] = self._before
+            else:
+                run["status"], run["error"] = state, error
+            try:
+                self.store.save(run)
+            except (OSError, KeyError) as e:
+                logger.error(f"Could not save {self.run_id}/run.json: {e!r}")
+        finally:
+            with self.lock:
+                self.state, self.error = state, error
 
     # ------------------------------------------------------------------ server thread
 
