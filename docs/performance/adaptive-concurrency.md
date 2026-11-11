@@ -1,5 +1,6 @@
 ---
-description: How Machyon picks and keeps adjusting the number of requests in flight - slow start, revert, probing, throttling and error backoff - with an interactive simulator.
+seo_title: "Adaptive concurrency for bulk downloads · Machyon"
+description: "How Machyon chooses how many requests to send at once, and keeps adjusting it: slow start, probing, backing off on errors and 429s. With a simulator."
 ---
 
 # Adaptive concurrency
@@ -7,6 +8,9 @@ description: How Machyon picks and keeps adjusting the number of requests in fli
 <p class="lead">Too few requests in flight wastes your connection. Too many gets you rate-limited, or just queues
 behind a full link. The right number depends on the server, the network and the hour, so Machyon measures it
 while it runs.</p>
+
+To watch it happen on a real server, open the [Adaptive Concurrency Lab](../lab/adaptive-concurrency.md): a recorded
+run, replayed decision by decision.
 
 ## Try it
 

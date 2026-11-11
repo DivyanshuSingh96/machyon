@@ -1,6 +1,7 @@
 ---
 hide:
   - toc
+seo_title: "Adaptive concurrency lab: a real run, replayed · Machyon"
 description: A real experiment, replayed in your browser - how many requests should a downloader send at once, and what Machyon actually did when a server said "too many".
 ---
 

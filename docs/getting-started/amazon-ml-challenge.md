@@ -1,5 +1,6 @@
 ---
-description: Download every image for the Amazon ML Challenge (or any hackathon) in one copy-paste cell, with the starter kit's file names, then join them back to your rows.
+seo_title: "Amazon ML Challenge: download every image · Machyon"
+description: Download every Amazon ML Challenge image in one copy-paste cell, with the starter kit's file names, then join the images back to your rows.
 ---
 
 # Amazon ML Challenge

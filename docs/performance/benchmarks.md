@@ -1,4 +1,5 @@
 ---
+seo_title: "Benchmarks: Machyon vs img2dataset · Machyon"
 description: Machyon against img2dataset on five network scenarios - throughput and correctness, how they were measured, and how to reproduce them.
 ---
 

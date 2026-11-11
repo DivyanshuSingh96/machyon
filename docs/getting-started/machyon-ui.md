@@ -1,5 +1,6 @@
 ---
-description: machyon ui opens Machyon in your browser, as a local app on your own computer. Paste links or upload a manifest, preview the file names, watch the download, then browse, retry or resume.
+seo_title: "machyon ui: a local app for bulk image downloads · Machyon"
+description: "machyon ui runs Machyon as a local app in your browser: paste links or upload a CSV, watch real progress, retry failures, and choose where runs are saved."
 ---
 
 # Machyon in your browser

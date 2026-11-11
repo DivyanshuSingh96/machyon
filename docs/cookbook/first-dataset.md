@@ -1,10 +1,11 @@
 ---
-description: A beginner project - download a small image dataset with one Machyon call, organise it into category folders, read the report, and browse a gallery of the result.
+seo_title: "Build an image dataset from a CSV with Python · Machyon"
+description: "A beginner project: download a small image dataset from a CSV with one Machyon call, sort it into category folders, and read the report."
 ---
 
 # Build your first image dataset
 
-<p class="lead">Turn a spreadsheet of image links into a folder of images sorted by category, a report of what
+<p class="lead">Turn a CSV of image URLs into a folder of images sorted by category, a report of what
 happened, and a gallery you can open in your browser. One Machyon call does the downloading.</p>
 
 <div class="mx-lab-levels compact" role="note" aria-label="About this project">

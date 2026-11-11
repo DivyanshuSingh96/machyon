@@ -32,6 +32,8 @@ jobs:
         run: zensical build --clean
       - name: Check links, anchors and third-party requests
         run: python tools/check_docs.py
+      - name: Check titles, descriptions, social tags, breadcrumbs and the sitemap
+        run: python -m pytest -q tests/test_site.py
       - name: Release gate (no placeholders)
         if: github.event_name == 'push'
         run: python tools/check_docs.py --release

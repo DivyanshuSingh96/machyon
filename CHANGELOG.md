@@ -7,6 +7,17 @@
 
 **Documentation**
 - Measured again with the fixed benchmark (20,000 images from the local test server, median of three runs). On Linux, slowing every `run.json` write by 1 second cut 1.1.1's download speed from 1,466 to 667 images/s and stalled its download loop for up to 1.02 s, while 1.2.0 kept its speed (1,336 and 1,366 images/s) and its loop's worst delay at 0.09 s. On Windows 10, a `run.json` write takes 69 ms at the median and up to 0.32 s, and 1.1.1 made one on the download loop every 2 seconds; with 1.2.0 the loop's worst delay stayed at 0.12 s even with each write slowed to 1.4 s.
+- Clearer search titles and descriptions for the documentation. The homepage is titled "Machyon: Fast Async Image Downloader for Python" instead of "Machyon - Machyon", and twelve pages have titles that say what they cover, such as "Download images from CSV, JSONL or Parquet". A page sets its search title with `seo_title` in its front matter; the heading and the navigation label stay as they are. "Contributing to Machyon - Machyon" is now "Contributing to Machyon". Seven descriptions are new or shorter, and the Architecture page has its own.
+- Link previews use the same title as the browser tab, with `twitter:title` and `twitter:description` set too. The 404 page's preview had no title, and a description containing quotes (the Lab's) cut its tag short.
+- Breadcrumb structured data (BreadcrumbList) on every page except the homepage, built from the navigation: a section is included only when it has a page of its own.
+- The Google Search Console verification tag for `https://divyanshusingh96.github.io/machyon/`.
+- Input sources has its own CSV/TSV and JSON/JSON Lines sections. The homepage introduces Machyon as an image downloader and its interfaces card now includes `machyon ui`. Quickstart links to the first-dataset recipe, and Adaptive concurrency to the Lab.
+- `docs/requirements.txt` is no longer copied into the published site.
+- `tests/test_site.py` checks the built site the way search engines and link previews read it: titles, descriptions, social tags, the verification tag, canonical URLs, breadcrumbs and the sitemap. The docs workflow runs it after the build.
+
+**Changed**
+- Package metadata: the PyPI homepage link points to the documentation (GitHub stays as Repository), the summary reads "Fast async image downloader for Python: self-tuning, rate-limit aware, every file accounted for.", and the keywords drop "web scraping" and "crawler", since Machyon downloads the URLs it is given and doesn't crawl sites. Adds the `Environment :: Console` classifier. PyPI shows this with the next release.
+- README: a Machyon UI section with a screenshot, the documentation link at the top, the supported Python versions, the UI and the Colab notebook marked done on the roadmap, a clearer answer about downloading from web pages, and a description of the test suite in place of a test count that had gone stale.
 
 ## 1.2.0 (2026-11-11)
 

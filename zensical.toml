@@ -15,6 +15,7 @@ strict = true
 exclude_docs = """
 overrides/
 _snippets/
+/requirements.txt
 """
 
 extra_css = ["assets/css/machyon.css"]

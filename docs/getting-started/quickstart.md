@@ -1,4 +1,5 @@
 ---
+seo_title: "Quickstart: download images from a list of URLs · Machyon"
 description: Download a list of image URLs with one line of Python or one command, see what happened, and resume.
 ---
 
@@ -19,6 +20,9 @@ JSONL and Parquet. Machyon finds the URL column by its name (`url`, `image_url`,
 
 `download()` blocks until every row is finished, then returns a [`Report`][machyon.Report]. A progress bar shows
 the rate, the current concurrency, retries and failures while it runs.
+
+New to this? [Build your first image dataset](../cookbook/first-dataset.md) runs the same call on a small CSV and
+sorts the images into folders by category.
 
 Your files are named `{hash}{ext}` by default: 16 hex characters derived from the URL, so the same URL always
 gets the same name, plus the image's real extension. To use your own columns:
