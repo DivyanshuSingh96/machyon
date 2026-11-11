@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-11
+## 1.1.1 (2026-11-11)
 
 **Fixed**
 - **`machyon ui` runs exactly one job at a time, and never loses track of it.** Two downloads started at the same moment were both accepted: two runs and two download threads, and Stop and Ctrl+C reached only one of them, while the page said nothing was running. The same happened with a download and a retry or resume, and with two clicks on Retry, which put two downloads into the same run folder. A job now takes the server's single job slot before anything else happens and keeps it until its download thread has really ended; every competing start, retry or resume is answered 409, whichever arrives first.
