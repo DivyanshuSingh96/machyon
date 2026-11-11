@@ -3,6 +3,9 @@
 The web server never waits on it: Machyon reports through ``on_progress``, the worker keeps the latest snapshot
 under a lock, and the server reads it when the page asks. Closing the browser changes nothing; the run goes on
 until it finishes, is stopped, or the server stops (then it is recorded as interrupted and can be resumed).
+
+Progress is saved to run.json by a CheckpointWriter, from a thread of its own: a slow disk, or an antivirus scan
+holding the file, never holds up the downloads.
 """
 from __future__ import annotations
 
@@ -19,7 +22,77 @@ from .runs import RunStore
 
 logger = logging.getLogger("machyon.ui")
 
-CHECKPOINT_S = 2.0   # how often a running job's progress is written to run.json
+CHECKPOINT_S = 2.0   # how often, at most, a running job's progress is saved to run.json (when it has changed)
+# What counts as progress having changed. Not the elapsed time, requests in flight or the concurrency limit: those
+# change on every snapshot, and a download that is stuck doesn't need run.json rewritten every two seconds.
+CHANGES = ("total", "planned", "downloaded", "skipped", "failed", "retries", "throttled", "hedged", "bytes", "phase")
+
+
+class CheckpointWriter:
+    """Saves a running job's run.json from a thread of its own.
+
+    At most one write at a time, and no queue: a snapshot handed in while a write is under way replaces any that was
+    waiting, so only the newest is written. Every snapshot carries a generation number that only grows, and an older
+    one never replaces a newer one, so checkpoints reach the disk in order. ``close()`` takes no more snapshots,
+    drops the one waiting and waits for the write under way; the worker writes the final run.json only after that,
+    so no checkpoint can ever land on top of the final state. A write that fails is logged, and ``error`` says why
+    until a later one succeeds: a checkpoint is never reported as saved when it wasn't."""
+
+    def __init__(self, store: RunStore) -> None:
+        self.store = store
+        self._cond = threading.Condition()
+        self._waiting: tuple[int, dict] | None = None
+        self._closed = False
+        self._thread: threading.Thread | None = None
+        self.written = 0                 # generation of the newest snapshot on disk
+        self.saved_at: float | None = None
+        self.error: str | None = None
+        self.writes = self.failures = 0
+
+    def submit(self, generation: int, run: dict) -> None:
+        """Hand in a snapshot of run.json to save. Never blocks: the caller is the download's event loop."""
+        with self._cond:
+            if self._closed or (self._waiting is not None and generation <= self._waiting[0]) \
+                    or generation <= self.written:
+                return
+            self._waiting = (generation, run)
+            if self._thread is None:
+                self._thread = threading.Thread(target=self._run, name="machyon-ui-checkpoint", daemon=True)
+                self._thread.start()
+            self._cond.notify()
+
+    def _run(self) -> None:
+        while True:
+            with self._cond:
+                while self._waiting is None and not self._closed:
+                    self._cond.wait()
+                if self._waiting is None:
+                    return
+                generation, run = self._waiting
+                self._waiting = None
+            try:
+                self.store.save(run)
+            except (OSError, KeyError) as e:
+                with self._cond:
+                    first = self.error is None
+                    self.failures += 1
+                    self.error = f"{type(e).__name__}: {e}"
+                if first:
+                    logger.warning(f"Could not save a progress checkpoint of {run.get('id')}: {e!r}")
+            else:
+                with self._cond:
+                    self.written, self.saved_at, self.error = generation, time.time(), None
+                    self.writes += 1
+
+    def close(self) -> None:
+        """Take no more snapshots, drop the one waiting, and return once no write is under way."""
+        with self._cond:
+            self._closed = True
+            self._waiting = None
+            self._cond.notify_all()
+            thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join()
 
 
 class Worker:
@@ -43,7 +116,13 @@ class Worker:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task | None = None
         self._stop_as: str | None = None   # "cancelled" (the Stop button) or "interrupted" (the server is stopping)
-        self._checkpoint = 0.0
+        self.writer = CheckpointWriter(store)
+        self._checkpoint = 0.0            # when the last checkpoint was handed in (monotonic)
+        self._generation = 0
+        self._saved: tuple | None = None  # the CHANGES of the last checkpoint handed in
+        self._phase: str | None = None
+        self.unchanged = 0                # checkpoints due but skipped: nothing had changed
+        self.save_error: str | None = None
         self._before = run["status"], run.get("error")   # restored if the job ends before doing anything
         self.thread = threading.Thread(target=self._work, name="machyon-ui-download", daemon=True)
 
@@ -103,22 +182,33 @@ class Worker:
             return
         self._finish("completed", report, None)
 
-    def _progress(self, snap: ProgressSnapshot) -> None:      # called on the worker's loop
+    def _progress(self, snap: ProgressSnapshot) -> None:
+        """Called on the download's own event loop, about twice a second: keep the snapshot, and hand a checkpoint
+        to the writer when one is due. Nothing here touches the disk."""
         with self.lock:
             self.snapshot = snap
+        if snap.done:                        # the final state is written by _finish, once the writer has closed
+            return
         now = time.monotonic()
-        if not snap.done and now - self._checkpoint >= CHECKPOINT_S:
-            self._checkpoint = now
-            self.run["progress"] = _snap_dict(snap)
-            try:
-                self.store.save(self.run)
-            except (OSError, KeyError) as e:
-                logger.warning(f"Could not save a progress checkpoint: {e!r}")
+        prompt = snap.phase != self._phase   # the first snapshot, or the final retry sweep beginning
+        if not prompt and now - self._checkpoint < CHECKPOINT_S:
+            return
+        changed = tuple(getattr(snap, k) for k in CHANGES)
+        if not prompt and changed == self._saved:
+            self.unchanged += 1
+            return
+        self._checkpoint, self._saved, self._phase = now, changed, snap.phase
+        self._generation += 1
+        # A copy as it stands now: run.json is written from another thread while this one goes on.
+        self.writer.submit(self._generation, {**self.run, "progress": _snap_dict(snap),
+                                              "history": [dict(h) for h in self.run["history"]]})
 
     def _finish(self, state: str, report, error: str | None, untouched: bool = False) -> None:
         """Write the outcome to run.json (and report.json), then publish it. The state is published even when the
-        disk refuses the write, so the server never mistakes a finished job for a running one."""
+        disk refuses the write, so the server never mistakes a finished job for a running one. The checkpoint writer
+        is closed first: once this write is made, nothing older can replace it."""
         run = self.run
+        self.writer.close()
         try:
             with self.lock:
                 snap = self.snapshot
@@ -143,6 +233,7 @@ class Worker:
                 self.store.save(run)
             except (OSError, KeyError) as e:
                 logger.error(f"Could not save {self.run_id}/run.json: {e!r}")
+                self.save_error = f"The result couldn't be saved to run.json ({type(e).__name__}: {e})."
         finally:
             with self.lock:
                 self.state, self.error = state, error
@@ -167,9 +258,11 @@ class Worker:
     def status(self) -> dict:
         with self.lock:
             snap, state, error = self.snapshot, self.state, self.error
+        save_error = self.save_error or (f"Progress couldn't be saved to run.json ({self.writer.error})."
+                                         if self.writer.error else None)
         return {"run_id": self.run_id, "kind": self.kind, "state": state, "error": error,
                 "stopping": self._stop_as is not None and state == "running",
-                "progress": _snap_dict(snap) if snap else None}
+                "progress": _snap_dict(snap) if snap else None, "save_error": save_error}
 
 
 def _snap_dict(snap: ProgressSnapshot) -> dict:

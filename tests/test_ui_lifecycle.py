@@ -386,12 +386,12 @@ def test_shutdown_while_starting_waits_and_leaves_no_worker(ui, cdn, pool, monke
 
 def test_shutdown_while_a_checkpoint_is_being_written(ui, cdn, monkeypatch):
     c = cdn("--rtt", "0.3")
-    in_worker = lambda run: threading.current_thread().name == "machyon-ui-download" and run["status"] == "running"  # noqa: E731
-    gate = Gate(monkeypatch, ui.store, "save", when=in_worker)
+    in_writer = lambda run: threading.current_thread().name == "machyon-ui-checkpoint"  # noqa: E731
+    gate = Gate(monkeypatch, ui.store, "save", when=in_writer)
     rid = start(ui, csv_of(c, 60, bad=()), names="", concurrency=2, adaptive=False)
-    gate.wait()                                       # the worker is inside a checkpoint write
+    gate.wait()                                       # a checkpoint write is under way
     fut = begin_shutdown(ui)
-    assert not fut.done() and len(workers()) == 1
+    assert not fut.done() and len(workers()) == 1          # the job waits for the write, and shutdown for the job
     gate.release.set()
     fut.result(TIMEOUT)
     assert not workers()
