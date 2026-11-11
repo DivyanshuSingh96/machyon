@@ -469,12 +469,15 @@ def served(tmp_path, monkeypatch):
     monkeypatch.setattr(srv, "Interrupts", Caught)
     released = {}
     real_release = srv.RootLock.release
+    root = tmp_path / "runs"
 
     def release(lock):
-        released["workers_alive"] = len(workers())
+        # Only the workspace's own lock counts. The same lock class guards upload staging folders, and a launch
+        # sweeps the ones a killed machyon ui left behind (another test's, say), releasing their locks as it goes.
+        if lock.path.parent == root.resolve():
+            released["workers_alive"] = len(workers())
         real_release(lock)
     monkeypatch.setattr(srv.RootLock, "release", release)
-    root = tmp_path / "runs"
     result = {}
     th = threading.Thread(target=lambda: result.setdefault("code", srv.serve(str(root), port, False)), daemon=True)
     th.start()
