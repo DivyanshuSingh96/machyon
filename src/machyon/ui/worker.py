@@ -13,6 +13,7 @@ import threading
 import time
 
 from ..downloader import Downloader
+from ..ledger import is_permanent
 from ..progress import ProgressSnapshot
 from .runs import RunStore
 
@@ -26,12 +27,14 @@ class Worker:
     the run as running, then ``start()`` starts the thread. ``stop()`` may come at any point, even before ``start()``:
     a worker stopped before its loop exists ends at once, without sending a single request."""
 
-    def __init__(self, store: RunStore, run: dict, kind: str, include_permanent: bool = False) -> None:
+    def __init__(self, store: RunStore, run: dict, kind: str, include_permanent: bool = False,
+                 also: frozenset = frozenset()) -> None:
         assert kind in ("download", "resume", "retry")
         self.store = store
         self.run = run
         self.kind = kind
         self.include_permanent = include_permanent
+        self.also = also          # permanent failure reasons a retry includes anyway (a new Referer can fix them)
         self.lock = threading.Lock()
         self.state = "running"          # running -> completed | cancelled | interrupted | error
         self.snapshot: ProgressSnapshot | None = None
@@ -81,7 +84,12 @@ class Worker:
         try:
             images = self.store.images(self.run_id)
             async with Downloader(images, on_progress=self._progress, progress=False, **run["settings"]) as dl:
-                if self.kind == "retry":
+                if self.kind == "retry" and self.also and not self.include_permanent:
+                    dl.ledger.load_once()
+                    only = {k for k, v in dl.ledger.failed.items()
+                            if not is_permanent(v["reason"]) or v["reason"] in self.also}
+                    report = await dl.retry_failed(include_permanent=True, only=only)
+                elif self.kind == "retry":
                     report = await dl.retry_failed(include_permanent=self.include_permanent)
                 else:
                     report = await dl.download(str(self.store.source(run)), run["names"],

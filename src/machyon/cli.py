@@ -159,8 +159,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--header", action="append", default=[], metavar="'Name: value'", help="extra request header")
 
     p = sub.add_parser("ui", help="open Machyon in your browser: a local app on this computer")
-    p.add_argument("--output-dir", default="~/machyon-downloads",
-                   help="folder that holds every run (default: %(default)s)")
+    p.add_argument("--output-dir", default=None,
+                   help="the workspace, the folder that holds every run, for this launch only (default: the folder "
+                        "last chosen in the app, else ~/machyon-downloads)")
     p.add_argument("--port", type=int, help="port on 127.0.0.1 (default: 8765, or a free one if it's taken)")
     p.add_argument("--no-browser", action="store_true", help="don't open a browser; just print the link")
     p.add_argument("--max-upload-mb", type=int, default=256,

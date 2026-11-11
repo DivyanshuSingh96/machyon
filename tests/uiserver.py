@@ -7,22 +7,29 @@ import secrets
 import threading
 import time
 import uuid
+from pathlib import Path
 
 from aiohttp import web
 
 from machyon.ui.runs import RunStore
 from machyon.ui.server import UI_KEY, bind, make_app
+from machyon.ui.workspace import Choice, RootLock, Staging
 
 
 class UIServer:
-    def __init__(self, root, max_upload_mb=256):
+    def __init__(self, root, max_upload_mb=256, *, prefs=None, lock=False):
+        """``prefs``: a Prefs (in the test's own folder), so choosing a workspace is remembered there; ``lock``: hold
+        the workspace's lock, as ``machyon ui`` does."""
         self.store = RunStore(root)
         self.store.recover()
         self.store.clear_staging()
         self.sock = bind(0)
         self.port = self.sock.getsockname()[1]
         self.token = secrets.token_urlsafe(32)
-        self.app = make_app(self.store, self.port, self.token, max_upload_mb)
+        self.staging = Staging(Path(root).parent / "staging")
+        choice = Choice(str(self.store.root), "default", prefs.workspace if prefs else None, prefs=prefs)
+        self.app = make_app(self.store, self.port, self.token, max_upload_mb, staging=self.staging,
+                            lock=RootLock(self.store.root) if lock else None, choice=choice)
         self.ui = self.app[UI_KEY]
         self.loop = asyncio.new_event_loop()
         ready = threading.Event()
@@ -106,6 +113,9 @@ class UIServer:
         """The same order as ``machyon ui`` on Ctrl+C: stop the job, wait for its worker to end, then close."""
         self.call(self.ui.shutdown)
         asyncio.run_coroutine_threadsafe(self.runner.cleanup(), self.loop).result(10)
+        self.staging.close()
+        if self.ui.lock is not None:
+            self.ui.lock.release()
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join(10)
 

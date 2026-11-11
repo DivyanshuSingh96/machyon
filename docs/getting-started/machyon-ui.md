@@ -28,15 +28,19 @@ image requests themselves.
 4. **Speed and retries.** Adaptive concurrency, the starting and maximum concurrency, retries per image and
    hedging, with the library's own defaults; timeouts and a few more are under *Advanced*. Image checks and
    HTTPS certificate checks always stay on.
+   **Referer**, under *Advanced*: some sites only serve their images to their own pages, and refuse everything
+   else (a 403, or an error page instead of an image). Paste the address of the page the images appear on, and
+   Machyon sends it with every request, as a browser would.
 5. **Start.** The progress shows the real counts from Machyon: downloaded, already on disk, failed, data,
    speed, the concurrency limit and requests in flight. When the number of rows isn't known in advance (it
    always is for a file), no percentage is invented.
 
 You can close the tab: the download goes on until it finishes, or until you stop it or stop `machyon ui`.
 
-## Where everything is saved
+## The workspace: where everything is saved
 
-Every run is a folder under `~/machyon-downloads` (change it with `--output-dir`):
+Every run is a folder inside the **workspace**, which the home page and the New download page show, with
+**Change folder** and **Copy path** beside it. Until you choose one, it is `~/machyon-downloads`:
 
 ```text
 ~/machyon-downloads/
@@ -52,11 +56,33 @@ There is no database: the History page is rebuilt from these folders every time,
 you can copy, back up or delete the folders yourself. The images folder works with the command line too, for
 example `machyon retry -o ~/machyon-downloads/run_.../images`.
 
+**Change folder** opens your system's folder dialog when there is one (it needs Tkinter, which the Windows and
+macOS installers from python.org include; on Linux it is usually the `python3-tk` package), and always lets you type
+or paste a path instead. Before anything changes, Machyon checks the folder and shows where the runs will really be
+written (the folder a shortcut or link leads to, say). A folder that doesn't exist yet is created only after you
+confirm, and a folder Machyon can't write to, a missing drive, a name Windows doesn't allow, a folder inside a run,
+or one another `machyon ui` is using is refused with the reason.
+
+- Runs stay where they were made. Changing the workspace moves and changes nothing; choose the old folder again to
+  see its runs. A link to a run in another workspace says so.
+- Links or a manifest you've already added on the New download page stay there when you change the folder from
+  that page: they wait outside every workspace until the download starts.
+- The workspace can't change while a download is running.
+- Your choice is remembered for next time, in a small settings file: `%APPDATA%\Machyon\ui.json` on Windows,
+  `~/Library/Application Support/Machyon/ui.json` on macOS, `~/.config/machyon/ui.json` on Linux.
+  `machyon ui --output-dir DIR` uses `DIR` for that launch only and leaves your choice as it is.
+- **If the folder you chose isn't available** when `machyon ui` starts (an external drive that isn't plugged in,
+  say), Machyon says so on the home page and in the terminal, and uses `~/machyon-downloads` for now. It downloads
+  nothing there until you confirm it, or you choose another folder. Your choice is kept: plug the drive back in
+  and start `machyon ui` again, and it is used again.
+
 ## When something didn't work
 
 - **Failures** lists every row that failed, with the reason and what usually fixes it. Links are shown without
   passwords or query values, which can hold secrets. **Retry failures** asks again for the ones that may
   recover; permanent ones (a 404, a page that isn't an image) are retried only if you tick the box and confirm.
+  When a site refused the images (403) or sent something that isn't an image, the card also offers a
+  **Referer**: retrying with a new one retries those rows too, and the run keeps it for later retries and resumes.
 - **An interrupted run**, one that was stopped or was running when `machyon ui` stopped, shows what is on disk
   now. **Resume** continues it with the same manifest, names, settings and folder: files already there are
   kept and skipped. The names can't be changed on resume, because that would change which file each row means.
@@ -65,7 +91,7 @@ example `machyon retry -o ~/machyon-downloads/run_.../images`.
 ## Options
 
 ```bash
-machyon ui --output-dir D:\datasets     # keep the runs somewhere else
+machyon ui --output-dir D:\datasets     # another workspace, for this launch only
 machyon ui --port 9000                  # a fixed port (it must be free)
 machyon ui --no-browser                 # just print the link
 machyon ui --max-upload-mb 1024         # accept larger manifests

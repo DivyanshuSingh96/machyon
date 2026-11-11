@@ -259,6 +259,130 @@ function setLive(job) {
   }, document.hidden ? 4000 : 2000);
 }
 
+// ------------------------------------------------------------------ the workspace
+
+// The folder every run is saved in. One line wherever it matters: the path, Change folder and Copy path.
+function workspaceLine(ws, { label = "Workspace", onChange } = {}) {
+  const busy = active(state && state.job);
+  return h("div", { class: "stack tight" },
+    h("p", { class: "where" }, h("b", { class: "ws-label", text: label }), h("span", { class: "path", text: ws.path }),
+      h("button", { class: "btn small", type: "button", disabled: busy, title: busy ? "Wait for the download to finish" : null,
+        onclick: () => chooseWorkspace(onChange) }, icon("folder"), "Change folder"),
+      h("button", { class: "btn small ghost", type: "button", onclick: () => copy(ws.path, "Folder path") }, icon("copy"), "Copy path")),
+    ws.source === "cli" && h("p", { class: "faint", text: "Set by --output-dir for this launch only. " +
+      (ws.saved ? `The workspace you chose in the app, ${ws.saved}, hasn't changed.` : "No workspace has been chosen in the app.") }),
+    ws.remember_problem && h("p", { class: "faint", text: `${ws.remember_problem}.` }));
+}
+
+// A saved workspace that's unavailable (an unplugged drive): say so, and download there only once confirmed.
+function fallbackNote(ws, onDone) {
+  if (!ws.fallback) return null;
+  const confirmBtn = h("button", { class: "btn small", type: "button", onclick: confirm }, "Use this folder for now");
+  async function confirm() {
+    confirmBtn.disabled = true;
+    try { await api("/api/workspace/confirm", { method: "POST", json: {} }); toast("Downloads will go to the temporary folder"); onDone(); }
+    catch (e) { confirmBtn.disabled = false; toast(e.message); }
+  }
+  return h("div", { class: "note warn", role: "alert" }, icon("warn"), h("div", { class: "stack tight" },
+    h("div", null, h("b", { text: "Your workspace isn't available" })),
+    h("div", { text: ws.message }),
+    h("div", { class: "faint", text: `${ws.saved}: ${ws.fallback}` }),
+    h("div", { class: "toolbar" },
+      !ws.confirmed && confirmBtn,
+      ws.confirmed && h("span", { class: "tag warn", text: "Confirmed for this session" }),
+      h("button", { class: "btn small primary", type: "button", onclick: () => chooseWorkspace(onDone) }, icon("folder"), "Choose another folder"))));
+}
+
+// Choose the workspace: the system's folder dialog when there is one, or a typed path, always checked by Machyon
+// first and shown as the folder runs will really be written to. Resolves with the new workspace (or null).
+function chooseWorkspace(onDone) {
+  const ws = state.workspace;
+  const input = h("input", { type: "text", value: ws.path, spellcheck: false, autocomplete: "off", "aria-label": "Folder path",
+    "aria-describedby": "ws-result" });
+  const result = h("div", { id: "ws-result", "aria-live": "polite" });
+  const create = h("input", { type: "checkbox" });
+  const okBtn = h("button", { class: "btn primary", type: "submit", value: "ok", disabled: true, text: "Use this folder" });
+  const browse = ws.picker && h("button", { class: "btn small", type: "button", onclick: pick }, icon("folder"), "Browse…");
+  let checked = null;
+  let seq = 0;
+  let timer = null;
+
+  function show(c) {
+    checked = c;
+    if (!c) { result.replaceChildren(); okBtn.disabled = true; return; }
+    if (!c.ok) {
+      result.replaceChildren(h("div", { class: "note bad" }, icon("warn"), h("div", { text: c.problem })));
+      okBtn.disabled = true;
+      return;
+    }
+    const lines = [h("div", null, "Runs will be saved in ", h("span", { class: "path", text: c.path }))];
+    if (c.link) lines.push(h("div", { class: "faint", text: "That path leads to this folder, so this is where the files will really be." }));
+    if (c.current) lines.push(h("div", { class: "faint", text: "This is the workspace already in use." }));
+    else if (c.exists) lines.push(h("div", { class: "faint", text: c.runs ? `It already holds ${plural(c.runs, "Machyon run")}; they'll be listed.` : "Existing runs stay where they are." }));
+    else lines.push(h("label", { class: "switch" }, create, h("span", null, "Create this folder",
+      h("span", { class: "hint", text: `It doesn't exist yet. Machyon will create it inside ${c.base}.` }))));
+    result.replaceChildren(h("div", { class: "note" }, icon(c.exists ? "folder" : "info"), h("div", { class: "stack tight" }, lines)));
+    sync();
+  }
+  function sync() { okBtn.disabled = !checked || !checked.ok || checked.current || (!checked.exists && !create.checked); }
+  create.addEventListener("change", sync);
+
+  async function check() {
+    const mine = ++seq;
+    const path = input.value;
+    if (!path.trim()) { show(null); return; }
+    try {
+      const c = await api("/api/workspace/check", { method: "POST", json: { path } });
+      if (mine === seq) show(c);
+    } catch (e) { if (mine === seq) show({ ok: false, problem: e.message }); }
+  }
+  input.addEventListener("input", () => { okBtn.disabled = true; clearTimeout(timer); timer = setTimeout(check, 350); });
+
+  async function pick() {
+    browse.disabled = true;
+    try {
+      const r = await api("/api/workspace/pick", { method: "POST", json: {} });
+      if (r.path) { input.value = r.path; await check(); }
+    } catch (e) {
+      browse.hidden = true;   // no dialog here: typing the path is the way
+      toast(e.message);
+      input.focus();
+    }
+    browse.disabled = false;
+  }
+
+  return new Promise((resolve) => {
+    const dlg = h("dialog", { class: "dlg", "aria-labelledby": "dlg-t" },
+      h("form", { method: "dialog", class: "stack" },
+        h("h2", { id: "dlg-t", text: "Choose the workspace" }),
+        h("p", { class: "muted", text: "Each run is saved in its own folder inside the workspace. Runs in the current " +
+          "workspace stay where they are, and you can come back to them by choosing it again." }),
+        h("label", { class: "field" }, "Folder", h("div", { class: "toolbar nowrap" }, input, browse)),
+        result,
+        h("div", { class: "toolbar end" }, h("button", { class: "btn", type: "submit", value: "cancel", text: "Cancel" }), okBtn)));
+    dlg.querySelector("form").addEventListener("submit", async (e) => {
+      if (e.submitter !== okBtn) return;
+      e.preventDefault();
+      okBtn.disabled = true;
+      try {
+        const r = await api("/api/workspace", { method: "POST", json: { path: checked.path, create: create.checked } });
+        state.workspace = r.workspace;
+        state.root = r.workspace.path;
+        toast(r.remember_problem ? "Workspace changed for this session" : "Workspace changed");
+        dlg.close("changed");
+        resolve(r.workspace);
+        if (onDone) onDone(r.workspace); else route();
+      } catch (err) { show({ ok: false, problem: err.message }); }
+    });
+    dlg.addEventListener("close", () => { dlg.remove(); if (dlg.returnValue !== "changed") resolve(null); });
+    document.body.append(dlg);
+    dlg.showModal();
+    input.focus();
+    input.select();
+    check();
+  });
+}
+
 // ------------------------------------------------------------------ home
 
 async function home() {
@@ -275,9 +399,8 @@ async function home() {
           h("a", { class: "btn primary", href: "#/new" }, icon("plus"), "New download"),
           job && h("a", { class: "btn", href: `#/run/${job.run_id}` }, icon("gauge"), "Watch the running download"))),
       h("div", { class: "hero-art" }, opa())),
-    h("p", { class: "where" }, "Runs are saved in", h("span", { class: "path", text: state.root }),
-      h("button", { class: "btn small ghost", type: "button", onclick: () => copy(state.root, "Folder path") },
-        icon("copy"), "Copy")),
+    fallbackNote(state.workspace, route),
+    workspaceLine(state.workspace),
     h("div", { class: "grid2" },
       h("section", { class: "card" },
         h("div", { class: "card-head" }, h("h2", { text: "Recent runs" }), h("span", { class: "grow" }),
@@ -335,12 +458,24 @@ async function newDownload() {
   if (!state) await refreshState();
   const d = state.defaults;
   const L = state.limits;
-  const s = { source: null, info: null, mode: "paste", names: "", settings: { ...d } };
+  const s = { source: null, info: null, mode: "paste", names: "", settings: { ...d, referer: d.referer || "" } };
   let namesTimer = null;
   let namesSeq = 0;
 
   const resultBox = h("div");
   const namesBox = h("div");
+  // Where this download goes. Changing it here keeps everything on this page, the manifest included.
+  const destination = h("div", { class: "stack tight" });
+  function drawDestination() {
+    const ws = state.workspace;
+    destination.replaceChildren(...[fallbackNote(ws, refreshWorkspace),
+      workspaceLine(ws, { label: "Saving to", onChange: refreshWorkspace })].filter(Boolean));
+    updateDock();
+  }
+  async function refreshWorkspace() {
+    try { state.workspace = (await api("/api/workspace")).workspace; } catch (e) { toast(e.message); }
+    drawDestination();
+  }
   const dockText = h("span", { class: "grow" });
   const startBtn = h("button", { class: "btn primary", type: "button", disabled: true, onclick: start }, icon("arrow"), "Start download");
   const status = h("p", { class: "faint", role: "status" });
@@ -505,12 +640,17 @@ async function newDownload() {
     fields[key] = input;
     return h("label", { class: "field" }, label, input, hint && h("span", { class: "hint", text: hint }));
   }
+  function text(key, label, hint, placeholder) {
+    const input = h("input", { type: "text", value: s.settings[key], placeholder, spellcheck: false, autocomplete: "off",
+      oninput: () => { s.settings[key] = input.value; } });
+    return h("label", { class: "field wide" }, label, input, h("span", { class: "hint", text: hint }));
+  }
   const settingsNote = h("p", { class: "faint", role: "status" });
   function syncSettings() {
     fields.concurrency.closest("label").firstChild.textContent = s.settings.adaptive ? "Starting concurrency" : "Concurrency";
     fields.max_concurrency.closest("label").hidden = !s.settings.adaptive;
     const bad = [];
-    for (const [k, v] of Object.entries(s.settings)) if (v === null || Number.isNaN(v)) bad.push(k);
+    for (const [k, v] of Object.entries(s.settings)) if (typeof d[k] === "number" && (v === null || Number.isNaN(v))) bad.push(k);
     if (s.settings.adaptive && s.settings.max_concurrency < s.settings.concurrency) bad.push("max");
     settingsNote.textContent = bad.length ? "Check the highlighted numbers." : "";
     for (const [k, input] of Object.entries(fields)) input.setAttribute("aria-invalid", String(bad.includes(k) || (k === "max_concurrency" && bad.includes("max"))));
@@ -518,9 +658,11 @@ async function newDownload() {
   }
 
   function updateDock() {
-    const ready = s.source && s.info && s.info.inspection.ok && s.namesOk !== false && !settingsNote.textContent;
+    const ws = state.workspace;
+    const ready = s.source && s.info && s.info.inspection.ok && s.namesOk !== false && !settingsNote.textContent && ws.confirmed;
     startBtn.disabled = !ready;
-    dockText.textContent = !s.source ? "Add images to download first."
+    dockText.textContent = !ws.confirmed ? "Confirm the temporary workspace, or choose another folder."
+      : !s.source ? "Add images to download first."
       : !s.info.inspection.ok ? "Choose the column with the image links."
       : s.namesOk === false ? "Fix the filename template."
       : settingsNote.textContent ? "Check the settings."
@@ -529,7 +671,7 @@ async function newDownload() {
 
   async function start() {
     startBtn.disabled = true;
-    const settings = { ...s.settings };
+    const settings = { ...s.settings, referer: s.settings.referer.trim() || null };
     if (!settings.adaptive) settings.max_concurrency = Math.max(settings.max_concurrency, settings.concurrency);
     try {
       const r = await api("/api/runs", { method: "POST", json: { source: s.source, names: s.names, settings } });
@@ -544,6 +686,7 @@ async function newDownload() {
   const view = h("div", { class: "stack" },
     h("div", null, h("h1", { text: "New download" }),
       h("p", { class: "muted", text: "Three steps: the links, how files are named, and how fast to go. The defaults are fine for almost everyone." })),
+    destination,
     h("section", { class: "card", "aria-labelledby": "s1" },
       h("div", { class: "card-head" }, h("span", { class: "step", text: "1" }), h("h2", { id: "s1", text: "Images to download" }),
         h("span", { class: "grow" }), h("div", { class: "seg", role: "group", "aria-label": "Source" }, segBtns)),
@@ -570,7 +713,9 @@ async function newDownload() {
           num("max_retry_after", "Longest Retry-After wait (s)", "Most it waits when a server asks.", 1),
           sw("verify_existing", "Check existing files", "Re-check files already on disk are images."),
           sw("warm_start", "Warm start", "Start from the pace that worked last time."),
-          sw("fsync", "Flush to disk", "Slower; safe against power loss."))),
+          sw("fsync", "Flush to disk", "Slower; safe against power loss."),
+          text("referer", "Referer", "Some sites only serve images to their own pages. Paste the page the images " +
+            "appear on (https://…); it is sent with every request.", "https://example.com/gallery"))),
       h("div", { class: "note" }, icon("shield"), h("div", { text: "Image checks and HTTPS certificate checks always stay on." })),
       settingsNote),
     h("div", { class: "note" }, icon("info"), h("div", { text: "Machyon downloads these links from this computer, like the " +
@@ -578,6 +723,7 @@ async function newDownload() {
     h("div", { class: "dock" }, dockText, startBtn));
   syncSettings();
   refreshNames();
+  drawDestination();
   return view;
 }
 
@@ -611,7 +757,7 @@ async function runPage(id) {
   else view.append(stoppedCard(r, files));
   if (files) {
     if (files.images.length) view.append(galleryCard(r, files));
-    if (files.failures.total) view.append(failuresCard(r, files.failures, busy));
+    if (files.failures.total) view.append(failuresCard(r, files.failures, busy, data.settings));
   }
   view.append(folderCard(r, data));
   return view;
@@ -850,21 +996,28 @@ const KIND = {
   retryable: ["may recover", "warn"], permanent: ["permanent", "bad"], row: ["fix the manifest", "bad"],
 };
 
-function failuresCard(r, f, busy) {
+function failuresCard(r, f, busy, settings) {
   const include = h("input", { type: "checkbox" });
+  // Refused (403) or not-an-image answers are what a site's hotlink protection sends: offer the Referer there.
+  const guarded = f.rows.some((x) => x.reason === "http_403" || x.reason === "not_image") || (settings && settings.referer);
+  const referer = h("input", { type: "text", value: (settings && settings.referer) || "", placeholder: "https://example.com/gallery",
+    spellcheck: false, autocomplete: "off" });
   const retryBtn = h("button", { class: "btn primary small", type: "button", disabled: busy || !(f.retryable || f.permanent), onclick: retry },
     icon("retry"), "Retry failures");
   async function retry() {
     const withPermanent = include.checked && f.permanent > 0;
+    const newReferer = guarded && referer.value.trim() && referer.value.trim() !== ((settings && settings.referer) || "");
     if (withPermanent) {
       const ok = await ask({ title: `Also retry ${plural(f.permanent, "permanent failure")}?`, ok: "Retry them too", danger: true,
         text: "These failed in a way a retry normally can't fix (a 404, a page that isn't an image…). Machyon will ask the servers again anyway." });
       if (!ok) return;
-    } else if (!f.retryable) { toast("Only permanent failures are left: tick the box to retry them anyway."); return; }
+    } else if (!f.retryable && !newReferer) { toast("Only permanent failures are left: tick the box to retry them anyway."); return; }
     if (retryBtn.disabled) return;
     retryBtn.disabled = true;
     try {
-      await api(`/api/runs/${r.id}/retry`, { method: "POST", json: { include_permanent: withPermanent, confirm: withPermanent } });
+      const json = { include_permanent: withPermanent, confirm: withPermanent };
+      if (guarded) json.referer = referer.value.trim() || null;
+      await api(`/api/runs/${r.id}/retry`, { method: "POST", json });
       say("Retrying");
       route();
     } catch (e) { retryBtn.disabled = false; toast(e.message); }
@@ -875,6 +1028,9 @@ function failuresCard(r, f, busy) {
       `${int(f.permanent)} ${f.permanent === 1 ? "is" : "are"} permanent` + (f.row ? `, ${int(f.row)} need a fix in the manifest.` : ".") }),
     f.permanent > 0 && h("label", { class: "switch" }, include, h("span", null, "Include permanent failures",
       h("span", { class: "hint", text: "You'll be asked to confirm." }))),
+    guarded && h("label", { class: "field wide" }, "Referer for the retry", referer,
+      h("span", { class: "hint", text: "The page the images appear on. With a new Referer, refused and not-an-image " +
+        "failures are retried too. Empty: none." })),
     h("div", { class: "table-wrap" }, h("table", null,
       h("thead", null, h("tr", null, h("th", { text: "Reason" }), h("th", { text: "File" }), h("th", { text: "Link" }), h("th", { text: "Details" }))),
       h("tbody", null, f.rows.map((x) => h("tr", null,
