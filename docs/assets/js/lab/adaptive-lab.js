@@ -333,7 +333,7 @@
     const card = (key, label, extra, ...more) => el("div", { class: `mx-lab-inst ${key}` },
       el("div", { class: "mx-lab-inst-num" }, v[key], extra), el("span", { class: "mx-lab-inst-label", text: label }), ...more);
     const root = el("section", { class: "mx-lab-instruments" },
-      el("h4", { text: "Measured at the server" }),
+      el("h3", { text: "Measured at the server" }),
       el("div", { class: "mx-lab-inst-row" },
         card("inflight", "requests in flight now", cap ? el("small", { text: `/ ${cap} limit` }) : null, meter(okFill, overFill, tick)),
         card("delivered", "images delivered so far", total ? el("small", { text: `of ${num(total)}` }) : null, meter(delFill)),
@@ -639,7 +639,7 @@
       el("img", { src: OPA_NIGHT, alt: "", width: 34, height: 34, class: "mx-only-dark" }));
     const receiptBody = el("div", { class: "mx-lab-receipt-body" });
     const receipt = el("section", { class: "mx-lab-receipt", "aria-live": "polite" },
-      el("header", {}, opaMark, el("h4", { text: "Reported by Machyon" })), receiptBody);
+      el("header", {}, opaMark, el("h3", { text: "Reported by Machyon" })), receiptBody);
     const status = el("p", { class: "mx-lab-sr", "aria-live": "polite" });
 
     // the whole run as a chart, which is also a timeline you can drag

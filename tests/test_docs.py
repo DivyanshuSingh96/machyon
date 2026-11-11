@@ -281,13 +281,65 @@ def test_opa_arrival_is_loaded_only_through_its_loader():
         assert needle in loader, needle
 
 
-def test_opa_arrival_bundle_is_self_contained_and_within_budget():
-    bundle = (OPA / "js" / "opa-arrival.js").read_text(encoding="utf-8")
-    assert "MachyonOpaArrival" in bundle
+def test_opa_arrival_bundles_are_self_contained_and_within_budget():
+    page_side = (OPA / "js" / "opa-arrival.js").read_text(encoding="utf-8")
+    renderer = (OPA / "js" / "opa-arrival-render.js").read_text(encoding="utf-8")
+    assert "MachyonOpaArrival" in page_side and "MachyonOpaRender" in renderer
     # no CDN: the only URL is the XHTML namespace three.js uses to create a canvas element
-    assert set(re.findall(r"https?://[\w./-]+", bundle)) <= {"http://www.w3.org/1999/xhtml"}
-    assert "SPDX-License-Identifier: MIT" in bundle          # three.js's licence travels with it
-    assert len(bundle.encode()) < 800_000
+    for bundle in (page_side, renderer):
+        assert set(re.findall(r"https?://[\w./-]+", bundle)) <= {"http://www.w3.org/1999/xhtml"}
+    assert "SPDX-License-Identifier: MIT" in renderer        # three.js's licence travels with it
+    assert len(renderer.encode()) < 800_000
+
+
+def test_opa_arrival_draws_off_the_main_thread():
+    """The page's side of the arrival stays small and without three.js, and hands the canvas to a worker."""
+    js = OPA / "js"
+    page_side = (js / "opa-arrival.js").read_text(encoding="utf-8")
+    renderer = (js / "opa-arrival-render.js").read_text(encoding="utf-8")
+    assert len(page_side.encode()) < 16_000
+    assert "transferControlToOffscreen" in page_side and "opa-arrival-render.js" in page_side
+    assert "WebGLRenderer" not in page_side and "WebGLRenderer" in renderer
+
+
+def test_opa_quality_rules(tmp_path):
+    """The renderer's quality rules: antialiasing stays unless the probe frames are clearly slow; only a sustained
+    run of slow frames lowers the resolution, never below 0.75 and at most three times; nothing skips the arrival."""
+    import shutil
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    renderer = (OPA / "js" / "opa-arrival-render.js").read_text(encoding="utf-8")
+    harness = """
+const window = globalThis; globalThis.self = globalThis;
+globalThis.requestAnimationFrame = () => 0; globalThis.cancelAnimationFrame = () => {};
+globalThis.document = {createElement: () => ({})};
+""" + renderer + """
+const T = window.MachyonOpaRender.tuning, out = {};
+out.aa = [T.chooseAntialias([80, 3, 4, 5, 4]), T.chooseAntialias([300, 72, 81, 70, 49]), T.chooseAntialias([300]),
+          T.chooseAntialias([])];
+const feed = (gaps, ratio) => { const g = T.governor(); let r = ratio; const steps = [];
+  for (const ms of gaps) { const n = g.gap(ms, r); if (n !== null) { r = n; steps.push(n); } } return {r, steps}; };
+const rep = (ms, n) => Array(n).fill(ms);
+out.smooth = feed(rep(16.7, 400), 2);                     // 60 fps
+out.powerSaving = feed(rep(33.4, 400), 2);                // 30 fps, a browser saving power
+out.oneHitch = feed([...rep(16.7, 50), 900, ...rep(16.7, 50)], 2);
+out.slow = feed(rep(70, 1000), 2);                        // software drawing
+out.slowAtOne = feed(rep(70, 1000), 1);
+out.warmupOnly = feed(rep(500, T.WARMUP), 2);             // shaders compiling: not counted
+console.log(JSON.stringify(out));
+"""
+    f = tmp_path / "opa_quality.js"
+    f.write_text(harness, encoding="utf-8")
+    got = json.loads(subprocess.run([node, str(f)], capture_output=True, text=True, timeout=60, check=True).stdout)
+    assert got["aa"] == [True, False, True, True]
+    assert got["smooth"] == {"r": 2, "steps": []}
+    assert got["powerSaving"] == {"r": 2, "steps": []}
+    assert got["oneHitch"] == {"r": 2, "steps": []}
+    assert got["slow"]["steps"] == [1.5, 1.13, 0.85]               # three steps, a quarter each, then it holds
+    assert got["slowAtOne"]["steps"] == [0.75]                     # never below 0.75
+    assert got["warmupOnly"] == {"r": 2, "steps": []}
 
 
 def test_opa_model_is_a_compressed_glb_with_the_approved_skeleton():
@@ -307,4 +359,5 @@ def test_opa_arrival_sources_are_kept():
     pkg = json.loads((src / "package.json").read_text(encoding="utf-8"))
     assert pkg["devDependencies"]["three"] == "0.187.0"
     assert (src / "package-lock.json").is_file() and (src / "build.ts").is_file()
-    assert {p.name for p in (src / "src").glob("*.ts")} >= {"arrival.ts", "choreo.ts", "film.ts", "model.ts", "player.ts", "rig.ts"}
+    assert {p.name for p in (src / "src").glob("*.ts")} >= {"arrival.ts", "choreo.ts", "film.ts", "model.ts", "player.ts", "rig.ts",
+                                                            "render.ts", "timeline.ts"}

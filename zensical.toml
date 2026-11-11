@@ -19,7 +19,8 @@ _snippets/
 """
 
 extra_css = ["assets/css/machyon.css"]
-extra_javascript = ["assets/js/toc-pin.js", "assets/js/tables.js", "assets/js/engine-sim.js", "assets/js/opa-404.js", "assets/js/opa-arrival-loader.js", "assets/js/lab/recording.js", "assets/js/lab/adaptive-lab.js"]
+# widgets.js loads engine-sim.js, the Lab's scripts and opa-404.js only on the pages whose markup uses them.
+extra_javascript = ["assets/js/toc-pin.js", "assets/js/tables.js", "assets/js/widgets.js", "assets/js/opa-arrival-loader.js"]
 
 nav = [
   { "Home" = "index.md" },

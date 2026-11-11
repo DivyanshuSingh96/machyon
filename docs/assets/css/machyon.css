@@ -278,6 +278,7 @@ body {
 /* footer */
 .md-footer { border-top: 1px solid var(--mx-line); }
 .md-footer__link:hover { opacity: 1; }
+.md-footer__direction { opacity: 1; color: var(--mx-muted); }   /* "Previous"/"Next": the theme's 0.7 opacity fell below 4.5:1 */
 .md-footer-meta { background: transparent; color: var(--mx-muted); }
 .md-footer-meta__inner { color: var(--mx-muted); }
 .md-footer-meta a { color: var(--mx-muted); }
@@ -325,7 +326,7 @@ body {
   background: var(--mx-surface); border-radius: var(--mx-radius); box-shadow: var(--mx-shadow); }
 .mx-card { padding: 1rem 1.1rem; transition: transform .2s var(--mx-ease), box-shadow .2s var(--mx-ease); }
 .mx-card:hover { transform: translateY(-2px); box-shadow: var(--mx-shadow-lift); }
-.mx-card h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.mx-card h2, .mx-card h3 { margin: 0 0 0.35rem; font-size: 0.95rem; line-height: 1.5; }   /* h2 where cards sit under the h1 */
 .mx-card p { margin: 0; font-size: 0.76rem; line-height: 1.65; color: var(--mx-muted); }
 .mx-card a { font-size: 0.74rem; }
 
@@ -347,7 +348,9 @@ body {
 /* benchmark bars (generated from the results file) */
 .md-typeset figure.mx-bars { display: grid; gap: 1.2rem; margin: 1.2rem 0; width: 100%; max-width: none; text-align: left; }
 .md-typeset .mx-bars figcaption { font-size: 0.7rem; color: var(--mx-muted); font-style: normal; max-width: none; margin: 0; text-align: left; }
-.mx-bar-group h4 { margin: 0 0 0.35rem; font-size: 0.8rem; }
+/* a label for each group of bars, set like the h4 it used to be (it isn't a section heading) */
+.md-typeset .mx-bar-title { margin: 0 0 0.35rem; font: 700 0.8rem/1.75 var(--mx-head-font); letter-spacing: -0.015em;
+  color: var(--mx-ink); text-wrap: balance; }
 .mx-bar { display: grid; grid-template-columns: 10rem minmax(0, 1fr) 5.5rem 8.5rem; gap: 0.6rem; align-items: center; font-size: 0.72rem; padding: 0.14rem 0; }
 .mx-bar small { color: var(--mx-muted); font-size: 0.66rem; font-weight: 400; }
 .mx-bar span.track { height: 0.62rem; border-radius: 999px; background: var(--mx-band2); overflow: hidden; }
@@ -587,15 +590,15 @@ body {
 .mx-lab-motion-hint:empty { display: none; }
 
 /* measured at the server: four instruments in one bezel */
-.mx-lab-instruments h4, .mx-lab-receipt h4 { font: 700 0.74rem var(--mx-head-font); color: var(--lab-muted); margin: 0; letter-spacing: 0; }
+.mx-lab-instruments h3, .mx-lab-receipt h3 { font: 700 0.74rem var(--mx-head-font); color: var(--lab-muted); margin: 0; letter-spacing: 0; }
 .mx-lab-instruments { margin-top: 0.9rem; }
-.mx-lab-instruments h4 { margin-bottom: 0.45rem; }
+.mx-lab-instruments h3 { margin-bottom: 0.45rem; }
 .mx-lab-inst-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--lab-line); border-radius: 14px; overflow: hidden; }
 .mx-lab-inst { padding: 0.6rem 0.75rem 0.7rem; border-left: 1px solid var(--lab-line); display: flex; flex-direction: column; gap: 0.15rem; }
 .mx-lab-inst:first-child { border-left: 0; }
 .mx-lab-inst-num { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.3rem; }
 .mx-lab-inst-num b { font: 800 1.5rem/1.1 var(--mx-head-font); color: var(--lab-ink); font-variant-numeric: tabular-nums; }
-.mx-lab-inst-num small { font-size: 0.68rem; color: var(--lab-muted); white-space: nowrap; }
+.mx-lab-inst-num small { font-size: 0.68rem; color: var(--lab-muted); white-space: nowrap; opacity: 1; }   /* not the theme's faded small */
 .mx-lab-inst-label { font-size: 0.68rem; line-height: 1.35; color: var(--lab-muted); }
 .mx-lab-inst.over .mx-lab-inst-num b { color: var(--lab-over); }
 .mx-lab-inst.inflight.over { background: var(--lab-over-soft); }

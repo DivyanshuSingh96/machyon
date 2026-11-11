@@ -206,3 +206,112 @@ def test_package_metadata():
     assert not keywords & {"web scraping", "crawler", "scraper"}     # Machyon downloads URL lists; it doesn't crawl
     assert "image downloader" in keywords
     assert "Environment :: Console" in project["classifiers"]
+
+
+# ---------------------------------------------------------------------------------------- performance and accessibility
+
+WIDGET_SCRIPTS = ("engine-sim.js", "recording.js", "adaptive-lab.js", "opa-404.js")
+
+
+class Body(HTMLParser):
+    """Scripts, the header logo and the headings inside the page's article."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.scripts: list[str] = []
+        self.logo: dict | None = None
+        self.headings: list[tuple[int, str]] = []
+        self._in_logo = 0
+        self._article = 0
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "script" and a.get("src"):
+            self.scripts.append(a["src"].split("/")[-1])
+        elif tag == "a" and "md-logo" in (a.get("class") or "") and "md-header__button" in (a.get("class") or ""):
+            self._in_logo = 1
+        elif tag == "img" and self._in_logo and self.logo is None:
+            self.logo = a
+        elif tag == "article":
+            self._article += 1
+        elif self._article and len(tag) == 2 and tag[0] == "h" and tag[1].isdigit():
+            self.headings.append((int(tag[1]), a.get("class") or ""))
+
+    def handle_endtag(self, tag):
+        if tag == "a":
+            self._in_logo = 0
+        elif tag == "article":
+            self._article -= 1
+
+
+@pytest.fixture(scope="module")
+def bodies(site) -> dict:
+    out = {}
+    for rel in site["pages"]:
+        b = Body()
+        b.feed((site["folder"] / rel).read_text(encoding="utf-8"))
+        out[rel] = b
+    return out
+
+
+def test_widget_scripts_load_only_where_used(site, bodies):
+    """No page links the Lab's, the simulator's or the 404 page's scripts; widgets.js fetches them where the markup is."""
+    loader = (site["folder"] / "assets/js/widgets.js").read_text(encoding="utf-8")
+    for marker in ("data-mx-sim", "data-lab-replay", "data-lab-model", "data-opa-404"):
+        assert marker in loader
+    for rel, b in bodies.items():
+        assert not set(b.scripts) & set(WIDGET_SCRIPTS), (rel, b.scripts)
+        assert "widgets.js" in b.scripts, rel
+    for name in ("engine-sim.js", "lab/recording.js", "lab/adaptive-lab.js", "opa-404.js"):
+        assert (site["folder"] / "assets/js" / name).is_file(), name
+
+
+def test_header_logo_has_its_proportions(site, bodies):
+    svg = (ROOT / "docs/assets/brand/machyon-lockup-light.svg").read_text(encoding="utf-8")
+    vb = [float(x) for x in svg.split('viewBox="', 1)[1].split('"', 1)[0].split()]
+    for rel, b in bodies.items():
+        assert b.logo and b.logo.get("width") and b.logo.get("height"), rel
+        ratio = int(b.logo["width"]) / int(b.logo["height"])
+        assert abs(ratio / (vb[2] / vb[3]) - 1) < 0.005, (rel, ratio)
+
+
+def test_headings_never_skip_a_level(site, bodies):
+    """The benchmark bars' labels used to be <h4> straight after an <h2>; no page skips a level now."""
+    for rel, b in bodies.items():
+        levels = [lv for lv, _ in b.headings]
+        for prev, cur in zip(levels, levels[1:], strict=False):
+            assert cur <= prev + 1, (rel, levels)
+    html = (site["folder"] / "index.html").read_text(encoding="utf-8")
+    bars = html.split('class="mx-bars"', 1)[1].split("</figure>", 1)[0]
+    assert 'class="mx-bar-title"' in bars and "<h4" not in bars
+
+
+def _luminance(hex_colour: str) -> float:
+    h = hex_colour.lstrip("#")
+    def channel(c: int) -> float:
+        s = c / 255
+        return s / 12.92 if s <= 0.04045 else ((s + 0.055) / 1.055) ** 2.4
+    r, g, b = (channel(int(h[i:i + 2], 16)) for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a: str, b: str) -> float:
+    la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def test_muted_text_meets_wcag_aa():
+    """The muted colours used for small text (the footer's Previous/Next, the Lab's instrument units) on their
+    backgrounds, in both colour schemes, at full opacity: at least 4.5:1."""
+    import re
+    css = (ROOT / "docs/assets/css/machyon.css").read_text(encoding="utf-8")
+    def schemes(name: str) -> list[str]:
+        return re.findall(rf"--{name}:\s*(#[0-9A-Fa-f]{{6}})", css)
+    pairs = [("mx-muted", "mx-paper"), ("mx-muted", "mx-bg1"), ("lab-muted", "lab-paper")]
+    for fg, bg in pairs:
+        fgs, bgs = schemes(fg), schemes(bg)
+        assert len(fgs) == len(bgs) == 2, (fg, bg)                   # light and dark
+        for f, b in zip(fgs, bgs, strict=True):
+            assert contrast(f, b) >= 4.5, (fg, f, bg, b, round(contrast(f, b), 2))
+    assert re.search(r"\.md-footer__direction\s*\{[^}]*opacity:\s*1", css)          # not the theme's 0.7
+    assert re.search(r"\.mx-lab-inst-num small\s*\{[^}]*opacity:\s*1", css)         # not the theme's faded <small>

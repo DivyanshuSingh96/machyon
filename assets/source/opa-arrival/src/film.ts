@@ -3,25 +3,16 @@
 import {Pt, lerp, lerpPt} from './geom';
 import {Pose, blend, CURL_FULL, CURL_MID, SWIM, arcCurve, mirrorPose} from './rig';
 import {TURN} from './poses';
+import {clamp01, smooth, inOut, prog, FPS, T, turnA, curl, KEY, tailA, tailB, detailA, exact, DIP, DIP_LEN, END} from './timeline';
 
-export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
-export const smooth = (t: number) => { const u = clamp01(t); return u * u * (3 - 2 * u); };
-export const inOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-export const prog = (t: number, a: number, b: number, e: (u: number) => number = inOut) => e(clamp01((t - a) / (b - a)));
+export {clamp01, smooth, inOut, prog, FPS, T, turnA, curl, KEY, tailA, tailB, detailA, exact, DIP, DIP_LEN, END, FADE} from './timeline';
+
 const add = (a: Pt, b: Pt): Pt => [a[0] + b[0], a[1] + b[1]];
 const mul = (a: Pt, s: number): Pt => [a[0] * s, a[1] * s];
 const cbez = (a: Pt, b: Pt, c: Pt, d: Pt, t: number): Pt => {
   const u = 1 - t, k = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
   return [k[0] * a[0] + k[1] * b[0] + k[2] * c[0] + k[3] * d[0], k[0] * a[1] + k[1] * b[1] + k[2] * c[1] + k[3] * d[1]];
 };
-
-// ---------------------------------------------------------------- timeline (seconds from the first visible frame)
-export const FPS = 24;
-export const T = {appear: 0.25, approachEnd: 2.0, plane: 2.6, laneEnd: 4.3};
-export const turnA = T.laneEnd - 2 / FPS, curl = T.laneEnd + 32 / FPS, KEY = 14 / 34;    // film frames 498, 532 (lane ends at 500)
-export const tailA = T.laneEnd + 22 / FPS, tailB = T.laneEnd + 36 / FPS, detailA = T.laneEnd + 24 / FPS, exact = T.laneEnd + 40 / FPS;
-export const DIP = exact + 0.5, DIP_LEN = 10 / FPS, END = DIP + DIP_LEN + 0.35;
-export const FADE = 0.25;                                        // the cross-fade from the 3D render to the hero logo
 
 /** The film's swim pose, facing left (the lane). */
 export const SWIM_L = mirrorPose(SWIM, 250);

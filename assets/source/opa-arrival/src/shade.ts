@@ -1,6 +1,10 @@
 // Opa's look: flat brand fills with two-tone cel shading, a page-coloured outline (the logo's gaps), distance haze
 // toward the page colour, and the hand-over controls (flat fills, depth flattened toward the page plane).
 import {BackSide, Color, FrontSide, ShaderMaterial, Vector3} from 'three';
+import {Palette, PALETTES} from './palette';
+
+export type {Palette} from './palette';
+export {PALETTES} from './palette';
 
 const VS = `#include <common>
 #include <skinning_pars_vertex>
@@ -33,12 +37,6 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }`;
-
-export type Palette = {body: string; amber: string; pupil: string; bg: string; dark: boolean};
-export const PALETTES: Record<'light' | 'dark', Palette> = {
-  light: {body: '#2A3142', amber: '#F5B83D', pupil: '#2A3142', bg: '#fffaf2', dark: false},
-  dark: {body: '#FFFFFF', amber: '#F5B83D', pupil: '#2A3142', bg: '#1e2230', dark: true},
-};
 
 const mat = (outline: boolean) => new ShaderMaterial({
   vertexShader: VS, fragmentShader: FS, side: outline ? BackSide : FrontSide, defines: outline ? {OUTLINE: 1} : {},

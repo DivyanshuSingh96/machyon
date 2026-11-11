@@ -10,7 +10,7 @@ what you see is what the library actually did, not an animation of what it's sup
 <div class="mx-grid" markdown>
 <div class="mx-card" markdown>
 
-### [Adaptive Concurrency Lab](adaptive-concurrency.md)
+## [Adaptive Concurrency Lab](adaptive-concurrency.md)
 
 How many requests should a downloader send at once? Feel the limit, predict what Machyon does when a server says
 "too many", then watch four real runs against the same server.
