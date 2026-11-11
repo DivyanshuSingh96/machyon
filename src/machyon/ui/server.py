@@ -17,8 +17,12 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import functools
+import hashlib
 import hmac
+import importlib.util
 import itertools
+import json
 import logging
 import os
 import re
@@ -45,14 +49,28 @@ from ..naming import BUILTIN_KEYS, NameTemplate, as_namer
 from ..planner import Planner
 from ..sources import inspect, iter_pairs, read_rows
 from ..utils import IMAGE_EXTS
-from .runs import SOURCE_EXTS, RunStore
+from .runs import SOURCE_EXTS, RunStore, sha256_of
 from .worker import Worker
+from .workspace import (
+    DEFAULT_WORKSPACE,
+    Choice,
+    FolderProblem,
+    Prefs,
+    RootLock,
+    Staging,
+    check_folder,
+    choose_at_launch,
+    same_place,
+)
 
 logger = logging.getLogger("machyon.ui")
 
 STATIC = Path(__file__).resolve().parent / "static"
 DEFAULT_PORT = 8765
-DEFAULT_OUTPUT = "~/machyon-downloads"
+DEFAULT_OUTPUT = DEFAULT_WORKSPACE
+PICKER = Path(__file__).resolve().with_name("picker.py")   # run in its own process: a dialog can't block the server
+FALLBACK = ("Your previously selected workspace is unavailable. Machyon is temporarily using {path}. Your original "
+            "workspace preference has been preserved. Reconnect the drive or choose another folder.")
 JSON_LIMIT_MB = 50            # a plain .json manifest is parsed whole, so it gets a lower limit
 PASTE_MAX_LINES = 100_000
 PREVIEW_ROWS = 20
@@ -84,7 +102,9 @@ SETTINGS = {
     "verify_existing": (bool, None, None),
     "warm_start": (bool, None, None),
     "fsync": (bool, None, None),
+    "referer": (str, None, None),   # sent as the Referer header with every request; empty means none
 }
+REFERER_MAX = 2048
 
 
 class BadRequest(ValueError):
@@ -97,6 +117,13 @@ class TooLarge(Exception):
         self.limit = limit
 
 
+class RunMissing(KeyError):
+    """No run with that id in the current workspace (404, with a message that says where Machyon looked)."""
+
+    def __str__(self) -> str:
+        return self.args[0]
+
+
 class Refused(Exception):
     """An action that can't happen now: 409 when something else holds what it needs, 503 while shutting down."""
 
@@ -107,6 +134,7 @@ class Refused(Exception):
 
 BUSY = "A download is already running. Wait for it to finish, or stop it first."
 CLOSING = "Machyon UI is shutting down."
+SWITCHING = "The workspace is being changed. Try again in a moment."
 WAIT_NOTICE_S = 10.0   # while shutdown waits for a download to stop, how often the terminal says so
 
 
@@ -156,7 +184,9 @@ def validate_settings(raw) -> dict:
     out = default_settings()
     for key, value in raw.items():
         kind, lo, hi = SETTINGS[key]
-        if kind is bool:
+        if kind is str:
+            value = validate_referer(value)
+        elif kind is bool:
             if not isinstance(value, bool):
                 raise BadRequest(f"{key} must be true or false")
         else:
@@ -169,6 +199,30 @@ def validate_settings(raw) -> dict:
     if out["max_concurrency"] < out["concurrency"]:
         raise BadRequest("maximum concurrency must be at least the starting concurrency")
     return out
+
+
+def validate_referer(value) -> str | None:
+    """A page address to send as the Referer header, or ``None``. Some sites serve their images only to their own
+    pages; the page the images appear on is what a browser would send."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str):
+        raise BadRequest("the referer must be text")
+    value = value.strip()
+    if len(value) > REFERER_MAX:
+        raise BadRequest(f"the referer is longer than {REFERER_MAX} characters")
+    if any(ord(c) < 33 or ord(c) == 127 for c in value):
+        raise BadRequest("the referer can't contain spaces or control characters")
+    try:
+        parts = urlsplit(value)
+        parts.port   # noqa: B018  raises on a malformed port
+    except ValueError:
+        raise BadRequest("the referer isn't a valid web address") from None
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise BadRequest("the referer must be a full web address starting with http:// or https://")
+    if parts.username is not None or parts.password is not None:
+        raise BadRequest("the referer can't contain a user name or password")
+    return value
 
 
 def validate_template(names, columns) -> str | None:
@@ -284,19 +338,34 @@ def walk_images(images: Path, limit: int | None = None, exts=IMAGE_EXTS):
     yield from itertools.islice(walk(images), limit)
 
 
+# What hotlink protection answers with. A retry that brings a new Referer retries these too, without the confirmation
+# other permanent failures need: the request is no longer the same one that failed.
+REFERER_REASONS = frozenset({"http_403", "not_image"})
+
+# The command line's hints name its flags; on the page, the same advice names the page's own settings.
+UI_HINTS = {
+    "http_403": "The server refused access. Many sites only serve images to their own pages: retry with the page "
+                "the images appear on as the Referer. Otherwise you may need to log in, or to go slower.",
+    "not_image": "The server answered with something that isn't an image (an error, login or bot-check page). "
+                 "If the site protects its images, retry with the page they appear on as the Referer.",
+}
+
+
 def failures_of(images: Path) -> dict:
     entries = FailureLedger(images).read(legacy=False)
     counts = {"retryable": 0, "permanent": 0, "row": 0}
+    reasons: dict[str, int] = {}
     rows = []
     for e in entries:
         reason = str(e.get("reason", "unknown"))
         kind = "row" if reason in ROW_REASONS else "permanent" if is_permanent(reason) else "retryable"
         n = len(e.get("names") or [None])
         counts[kind] += n
+        reasons[reason] = reasons.get(reason, 0) + n
         if len(rows) < FAILURES_MAX:
             rows.append({"url": redact_url(str(e.get("url", ""))), "names": e.get("names") or [], "reason": reason,
-                         "kind": kind, "error": redact_text(e.get("error")), "hint": hint(reason)})
-    return {"rows": rows, "total": sum(counts.values()), **counts}
+                         "kind": kind, "error": redact_text(e.get("error")), "hint": UI_HINTS.get(reason) or hint(reason)})
+    return {"rows": rows, "total": sum(counts.values()), "reasons": reasons, **counts}
 
 
 def remove_tree(folder: Path) -> None:
@@ -333,8 +402,17 @@ def open_folder(path: Path) -> bool:
 # ------------------------------------------------------------------ the application
 
 class UI:
-    def __init__(self, store: RunStore, port: int, token: str, max_upload_mb: int) -> None:
+    def __init__(self, store: RunStore, port: int, token: str, max_upload_mb: int, *, staging: Staging | None = None,
+                 lock: RootLock | None = None, choice: Choice | None = None) -> None:
         self.store = store
+        self.lock = lock                                 # the workspace's lock, swapped with it on a change
+        self.staging = staging or Staging()
+        self.choice = choice or Choice(str(store.root), "default", None)
+        self.acknowledged = False                        # a fallback workspace confirmed for new downloads
+        self.switching = False                           # the workspace is changing: no new jobs or deletions
+        self._no_deletes = asyncio.Event()
+        self._no_deletes.set()
+        self.picker: asyncio.subprocess.Process | None = None
         self.port = port
         self.token = token
         self.max_upload = max_upload_mb * 1024 * 1024
@@ -365,6 +443,8 @@ class UI:
             raise Refused(CLOSING, 503)
         if self.reservation is not None:
             raise Refused(BUSY)
+        if self.switching:
+            raise Refused(SWITCHING)
         if run_id is not None and run_id in self.deleting:
             raise Refused("This run is being deleted.")
         self.reservation = JobReservation(next(self._ids), kind, run_id)
@@ -418,6 +498,8 @@ class UI:
         thread has ended and every task the UI owns has finished. No time limit: the folder lock must outlive the
         worker. ``notice()`` is called every WAIT_NOTICE_S seconds while it waits."""
         self.closing = True
+        if self.picker is not None and self.picker.returncode is None:
+            self.picker.kill()                           # a folder dialog left open
         if self.reservation is not None:
             self.reservation.stop("interrupted")
         while self._tasks:
@@ -441,7 +523,8 @@ class UI:
         report = self.store.report(run["id"]) if run["status"] == "completed" else None
         if report:
             report["failure_examples"] = {k: {**v, "url": v.get("url") and redact_url(v["url"]),
-                                              "error": redact_text(v.get("error"))}
+                                              "error": redact_text(v.get("error")),
+                                              "hint": UI_HINTS.get(k) or v.get("hint")}
                                           for k, v in (report.get("failure_examples") or {}).items()}
         w = self.reservation.worker if self.reservation is not None else None
         live = w.status() if w is not None and w.run_id == run["id"] and w.running else None
@@ -452,22 +535,24 @@ class UI:
     async def stage(self, data_chunks, ext: str, original: str | None, cap: int) -> tuple[str, Path]:
         """Stream an upload into the staging folder under a server-made name, counting the bytes actually received."""
         self._expire_staged()
-        self.store.staging.mkdir(exist_ok=True)
         sid = secrets.token_hex(8)
-        part = self.store.staging / f"{sid}{ext}.part"
+        part = self.staging.dir / f"{sid}{ext}.part"
         size = 0
+        digest = hashlib.sha256()   # checked again once the manifest is copied into its run
         try:
             with open(part, "wb") as f:
                 async for chunk in data_chunks:
                     size += len(chunk)
                     if size > cap:
                         raise TooLarge(cap)
+                    digest.update(chunk)
                     f.write(chunk)
             final = part.with_name(f"{sid}{ext}")
             os.replace(part, final)
         finally:
             part.unlink(missing_ok=True)
-        self.staged[sid] = {"path": final, "name": original, "ext": ext, "created": time.time(), "size": size}
+        self.staged[sid] = {"path": final, "name": original, "ext": ext, "created": time.time(), "size": size,
+                            "digest": digest.hexdigest()}
         return sid, final
 
     # ---- middleware
@@ -494,6 +579,10 @@ class UI:
             resp = _error(str(e), 400)
         except Refused as e:
             resp = _error(str(e), e.status)
+        except FolderProblem as e:
+            resp = _error(str(e), 400)
+        except RunMissing as e:
+            resp = _error(str(e), 404)
         except TooLarge as e:
             resp = _error(f"That's more than {e.limit / 1048576:g} MB, the limit for this kind of file.", 413)
         except KeyError:
@@ -520,7 +609,7 @@ class UI:
             "builtin_keys": sorted(BUILTIN_KEYS),
             "limits": {"upload_mb": self.max_upload // 1048576, "json_mb": min(JSON_LIMIT_MB, self.max_upload // 1048576),
                        "paste_lines": PASTE_MAX_LINES, "formats": list(SOURCE_EXTS)},
-            "job": self.job_snapshot(),
+            "job": self.job_snapshot(), "workspace": self.workspace_info(),
             "recent": [self.run_summary(r) for r in runs[:6]], "runs": len(runs)})
 
     # ---- sources
@@ -568,6 +657,7 @@ class UI:
             self.staged.pop(sid)["path"].unlink(missing_ok=True)
             raise BadRequest("no http:// or https:// links found" + (f" ({n_bad} invalid lines)" if n_bad else ""))
         path.write_text("\n".join(urls) + "\n", encoding="utf-8")
+        self.staged[sid]["digest"] = await asyncio.to_thread(sha256_of, path)
         body = await self._inspected(sid, path, None)
         body.update({"valid": len(urls), "invalid": bad, "invalid_count": n_bad})
         return web.json_response(body)
@@ -604,19 +694,22 @@ class UI:
             raise BadRequest("choose the column that holds the image links")
         names = validate_template(body.get("names"), s.get("columns"))
         settings = validate_settings(body.get("settings", {}))
+        if self.choice.fallback and not self.acknowledged:   # never download onto the fallback unconfirmed
+            raise Refused(FALLBACK.format(path=self.store.root) + " Confirm this folder to download here.")
         res = self.reserve("download")
         self.staged.pop(sid)   # this start owns the staged manifest now (and nothing can expire it meanwhile)
         source = {"kind": "paste" if s["name"] is None else "upload", "original_name": s["name"],
                   "format": s["format"], "url_col": s.get("url_col"), "size": s["size"]}
 
         def prepare() -> Worker:
-            return _ready(Worker(self.store, self.store.create(s["path"], source, settings, names), "download"))
+            run = self.store.create(s["path"], source, settings, names, s.get("digest"))
+            return _ready(Worker(self.store, run, "download"))
 
         async def go() -> str:
             try:
                 return await self.launch(res, prepare)
             except BaseException:
-                if s["path"].is_file():    # the run wasn't made and the manifest is back in staging: keep it
+                if s["path"].is_file():    # the run wasn't made; the manifest is still staged: keep it
                     self.staged[sid] = s
                 raise
         return await self._accepted(go())
@@ -630,7 +723,7 @@ class UI:
         return web.json_response({"run": run_id}, status=202)
 
     async def run_detail(self, request: web.Request):
-        run = self.store.load(request.match_info["run_id"])
+        run = self._run(request)
         return web.json_response({"run": self.run_summary(run), "settings": run["settings"],
                                   "history": run["history"], "folder": str(self.store.path(run["id"])),
                                   "images": str(self.store.images(run["id"]))})
@@ -639,7 +732,12 @@ class UI:
         return web.json_response({"runs": [self.run_summary(r) for r in self.store.list()]})
 
     def _run(self, request) -> dict:
-        return self.store.load(request.match_info["run_id"])
+        rid = request.match_info["run_id"]
+        try:
+            return self.store.load(rid)
+        except KeyError:
+            raise RunMissing(f"There's no run {rid[:40]} in the current workspace, {self.store.root}. It may have "
+                             "been deleted, or be in another workspace.") from None
 
     async def files(self, request: web.Request):
         run = self._run(request)
@@ -684,14 +782,20 @@ class UI:
         include = body.get("include_permanent") is True
         if include and body.get("confirm") is not True:
             raise BadRequest("retrying permanent failures needs confirming")
+        new_referer = "referer" in body   # a retry may set (or clear) the referer: it changes no file name
+        referer = validate_referer(body.get("referer")) if new_referer else None
         res = self.reserve("retry", rid)
 
         def prepare() -> Worker:
             run = self.store.load(rid)    # read again now that this job owns it
             fails = failures_of(self.store.images(rid))
-            if not fails["retryable"] and not (include and fails["permanent"]):
+            also = REFERER_REASONS if new_referer and referer and referer != run["settings"].get("referer") else frozenset()
+            if not fails["retryable"] and not (include and fails["permanent"]) \
+                    and not any(fails["reasons"].get(r) for r in also):
                 raise BadRequest("nothing to retry" + (": only permanent failures are left" if fails["permanent"] else ""))
-            return _ready(Worker(self.store, run, "retry", include_permanent=include))
+            if new_referer:
+                run["settings"]["referer"] = referer   # kept for later retries and resumes; saved by prepare()
+            return _ready(Worker(self.store, run, "retry", include_permanent=include, also=also))
         return await self._accepted(self.launch(res, prepare))
 
     async def resume(self, request: web.Request):
@@ -722,7 +826,10 @@ class UI:
             raise Refused("This run is downloading. Stop it first.")
         if rid in self.deleting:
             raise Refused("This run is already being deleted.")
+        if self.switching:
+            raise Refused(SWITCHING)
         self.deleting.add(rid)
+        self._no_deletes.clear()
         folder = self.store.path(rid)
 
         async def go() -> None:
@@ -730,6 +837,8 @@ class UI:
                 await asyncio.to_thread(remove_tree, folder)
             finally:
                 self.deleting.discard(rid)
+                if not self.deleting:
+                    self._no_deletes.set()
             if self.last is not None and self.last.run_id == rid:
                 self.last = None
         try:
@@ -757,6 +866,120 @@ class UI:
         res.stop("cancelled")   # while starting, kept until the worker exists: it then ends before any request
         return web.json_response({"job": res.status()})
 
+    # ---- the workspace
+
+    def workspace_info(self) -> dict:
+        c = self.choice
+        return {"path": str(self.store.root), "source": c.source, "saved": c.saved, "fallback": c.fallback,
+                "confirmed": not c.fallback or self.acknowledged,
+                "message": FALLBACK.format(path=self.store.root) if c.fallback else None,
+                "remember_problem": c.prefs.problem if c.prefs else None, "picker": picker_available()}
+
+    async def get_workspace(self, _request):
+        return web.json_response({"workspace": self.workspace_info()})
+
+    async def check_workspace(self, request: web.Request):
+        body = await _json(request)
+        try:
+            info = await asyncio.to_thread(check_folder, body.get("path"), forbidden=(self.staging.dir,))
+        except FolderProblem as e:
+            return web.json_response({"ok": False, "problem": str(e)})
+        return web.json_response({"ok": True, "current": same_place(info["path"], self.store.root), **info})
+
+    async def confirm_workspace(self, request: web.Request):
+        await _json(request)
+        self.acknowledged = True
+        return web.json_response({"workspace": self.workspace_info()})
+
+    async def set_workspace(self, request: web.Request):
+        """Change the workspace. Checked and claimed like the job slot, with no await in between: refused while a
+        job owns the slot; new jobs and deletions are refused while it changes, and deletions already under way
+        finish first. The new folder is locked and opened before the old one is let go, so a failure anywhere
+        leaves the current workspace exactly as it was."""
+        body = await _json(request)
+        raw, create = body.get("path"), body.get("create") is True
+        if self.closing:
+            raise Refused(CLOSING, 503)
+        if self.reservation is not None:
+            raise Refused("A download is running. Wait for it to finish, or stop it, before changing the workspace.")
+        if self.switching:
+            raise Refused("The workspace is already being changed.")
+        self.switching = True
+
+        async def go() -> str | None:
+            try:
+                await self._no_deletes.wait()
+                opened = await asyncio.to_thread(self._open_workspace, raw, create)
+                if opened is not None:
+                    old, (self.store, self.lock) = self.lock, opened
+                    if old is not None:
+                        old.release()
+                self.last = None
+                prefs = self.choice.prefs
+                problem = await asyncio.to_thread(prefs.remember_workspace, self.store.root) if prefs else None
+                saved = str(self.store.root) if prefs and not problem else self.choice.saved
+                self.choice = Choice(str(self.store.root), "chosen", saved, prefs=prefs)
+                self.acknowledged = False
+                return problem
+            finally:
+                self.switching = False
+        try:
+            problem = await asyncio.shield(self.spawn(go()))
+        except OSError as e:
+            return _error(f"That folder can't be used: {e.strerror or e}.", 500)
+        return web.json_response({"workspace": self.workspace_info(), "remember_problem": problem})
+
+    def _open_workspace(self, raw, create: bool):
+        """Lock and open the folder ``raw`` names (blocking). ``None`` when it is already the workspace."""
+        info = check_folder(raw, forbidden=(self.staging.dir,))
+        root = Path(info["path"])
+        if same_place(root, self.store.root):
+            return None
+        if not info["exists"]:
+            if not create:
+                raise BadRequest("That folder doesn't exist yet. Confirm that Machyon should create it.")
+            root.mkdir(parents=True, exist_ok=True)
+        try:
+            lock = RootLock(root)
+        except OSError:
+            raise Refused("Another Machyon UI is using that folder. Use that one, or choose another folder.") from None
+        try:
+            store = RunStore(root)
+            store.recover()          # its runs left "running" by a process that has gone
+            store.clear_staging()
+        except BaseException:
+            lock.release()
+            raise
+        return store, lock
+
+    async def pick_folder(self, request: web.Request):
+        """Show the system's folder dialog (Tkinter, in a helper process) and return the folder chosen."""
+        await _json(request)
+        if self.picker is not None:
+            raise Refused("A folder dialog is already open: look for it behind this window.")
+        if self.closing:
+            raise Refused(CLOSING, 503)
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+        try:
+            self.picker = await asyncio.create_subprocess_exec(
+                sys.executable, "-I", str(PICKER), "--initial", str(self.store.root),
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=flags)
+            out, _ = await self.picker.communicate()
+        except OSError as e:
+            return _error(f"No folder dialog could be shown ({e.strerror or e}). Type the folder's path instead.", 501)
+        finally:
+            self.picker = None
+        try:
+            answer = json.loads(out.decode("ascii", "replace").strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            answer = {"error": "The folder dialog closed unexpectedly."}
+        if not isinstance(answer, dict) or answer.get("error") or not (answer.get("cancelled") or answer.get("path")):
+            reason = answer.get("error") if isinstance(answer, dict) else None
+            return _error(f"{reason or 'No folder dialog could be shown.'} Type the folder's path instead.", 501)
+        if answer.get("cancelled"):
+            return web.json_response({"cancelled": True})
+        return web.json_response({"path": str(answer["path"])})
+
     def routes(self, app: web.Application) -> None:
         r = app.router
         r.add_get("/", self.index)
@@ -775,9 +998,23 @@ class UI:
         r.add_post("/api/runs/{run_id}/resume", self.resume)
         r.add_post("/api/runs/{run_id}/open", self.open)
         r.add_delete("/api/runs/{run_id}", self.delete)
+        r.add_get("/api/workspace", self.get_workspace)
+        r.add_post("/api/workspace", self.set_workspace)
+        r.add_post("/api/workspace/check", self.check_workspace)
+        r.add_post("/api/workspace/confirm", self.confirm_workspace)
+        r.add_post("/api/workspace/pick", self.pick_folder)
         r.add_get("/api/job", self.job_status)
         r.add_post("/api/job/stop", self.job_stop)
         r.add_static("/static/", STATIC, follow_symlinks=False, show_index=False)
+
+
+@functools.cache
+def picker_available() -> bool:
+    """Whether a folder dialog can probably be shown: Tkinter is installed and there is a desktop to show it on.
+    The helper itself has the final word; the page offers typing the path either way."""
+    if importlib.util.find_spec("tkinter") is None:
+        return False
+    return sys.platform in ("win32", "darwin") or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
 def _ready(worker: Worker) -> Worker:
@@ -815,8 +1052,8 @@ async def _json(request: web.Request) -> dict:
     return body
 
 
-def make_app(store: RunStore, port: int, token: str, max_upload_mb: int = 256) -> web.Application:
-    ui = UI(store, port, token, max_upload_mb)
+def make_app(store: RunStore, port: int, token: str, max_upload_mb: int = 256, **workspace) -> web.Application:
+    ui = UI(store, port, token, max_upload_mb, **workspace)
     app = web.Application(middlewares=[ui.guard], client_max_size=1024 * 1024)
     app[UI_KEY] = ui
     ui.routes(app)
@@ -844,35 +1081,6 @@ def bind(port: int | None) -> socket.socket:
         return listen(DEFAULT_PORT)
     except OSError:
         return listen(0)
-
-
-class RootLock:
-    """One server per output folder, so a second one can't mark the first one's running download as interrupted."""
-
-    def __init__(self, root: Path) -> None:
-        self.path = root / ".machyon-ui.lock"
-        self.f = open(self.path, "a+b")  # noqa: SIM115  held for the server's lifetime
-        try:
-            if os.name == "nt":
-                import msvcrt
-                self.f.seek(0)
-                msvcrt.locking(self.f.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self.f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            self.f.close()
-            raise
-
-    def release(self) -> None:
-        try:
-            if os.name == "nt":
-                import msvcrt
-                self.f.seek(0)
-                msvcrt.locking(self.f.fileno(), msvcrt.LK_UNLCK, 1)
-        except OSError:
-            pass
-        self.f.close()
 
 
 class Interrupts:
@@ -932,26 +1140,32 @@ def _open(url: str) -> bool:
         return False
 
 
-def serve(output_dir: str = DEFAULT_OUTPUT, port: int | None = None, open_browser: bool = True,
+def serve(output_dir: str | None = None, port: int | None = None, open_browser: bool = True,
           max_upload_mb: int = 256) -> int:
+    """Run ``machyon ui``. ``output_dir`` (``--output-dir``) is the workspace for this launch only; without it, the
+    folder last chosen in the app is used when it is available, else ~/machyon-downloads (see workspace.py)."""
     if port is not None and not 1 <= port <= 65535:
         print(f"machyon ui: --port must be between 1 and 65535, not {port}", file=sys.stderr)
         return 2
     if not 1 <= max_upload_mb <= 102_400:
         print("machyon ui: --max-upload-mb must be between 1 and 102400", file=sys.stderr)
         return 2
-    try:
-        store = RunStore(output_dir)
-    except OSError as e:
-        print(f"machyon ui: can't use {output_dir} for the runs: {e}", file=sys.stderr)
-        return 1
-    try:
-        lock = RootLock(store.root)
-    except OSError:
-        print(f"machyon ui: another Machyon UI is already using {store.root}.\n"
-              "  Use that one, stop it, or start this one with a different --output-dir.", file=sys.stderr)
-        return 1
+    prefs = Prefs.load()
+    if prefs.problem:
+        print(f"  Note: {prefs.problem}.")
+    choice = choose_at_launch(output_dir, prefs)
+    opened = _open_at_launch(choice)
+    if isinstance(opened, int):
+        return opened
+    store, lock = opened
+    if choice.fallback:
+        print(f"  Your saved workspace, {choice.saved}, is unavailable: {choice.fallback}\n"
+              f"  Using {store.root} for now; the saved choice is kept for next time. Confirm it in the page before\n"
+              "  downloading there, or choose another folder.")
+    elif choice.source == "cli" and choice.saved and not same_place(choice.saved, store.root):
+        print(f"  --output-dir is used for this launch only; the workspace chosen in the app stays {choice.saved}.")
     app = None
+    staging = None
     try:
         try:
             sock = bind(port)
@@ -963,11 +1177,13 @@ def serve(output_dir: str = DEFAULT_OUTPUT, port: int | None = None, open_browse
         store.clear_staging()
         if recovered:
             print(f"  {len(recovered)} run(s) stopped last time without finishing; they can be resumed.")
+        staging = Staging()
         actual = sock.getsockname()[1]
         if port is None and actual != DEFAULT_PORT:
             print(f"  Port {DEFAULT_PORT} is in use; using {actual} instead.")
         token = secrets.token_urlsafe(32)
-        app = make_app(store, actual, token, max_upload_mb)
+        choice.path = str(store.root)
+        app = make_app(store, actual, token, max_upload_mb, staging=staging, lock=lock, choice=choice)
         url = f"http://127.0.0.1:{actual}/#token={token}"
         logging.getLogger("aiohttp.access").disabled = True
         interrupts = Interrupts()
@@ -983,8 +1199,36 @@ def serve(output_dir: str = DEFAULT_OUTPUT, port: int | None = None, open_browse
         print("  Machyon UI stopped.")
         return 0
     finally:
-        shutil.rmtree(store.staging, ignore_errors=True)
+        if staging is not None:
+            staging.close()
         # Normally reached only after the worker has ended (a second Ctrl+C leaves through os._exit instead). If a
         # job still holds the slot, the lock stays held and the operating system releases it with the process.
-        if app is None or not app[UI_KEY].busy():
+        ui = app[UI_KEY] if app is not None else None
+        if ui is None:
             lock.release()
+        elif not ui.busy() and ui.lock is not None:
+            ui.lock.release()   # the workspace in use now, which may not be the one it started with
+
+
+def _open_at_launch(choice: Choice):
+    """The run store and lock of the launch's workspace, or an exit status after explaining why there is none.
+    A saved workspace that can't be opened, or that another Machyon UI holds, falls back to the default: ``choice``
+    is updated to say so."""
+    try:
+        store = RunStore(choice.path)
+    except OSError as e:
+        if choice.source != "saved":
+            print(f"machyon ui: can't use {choice.path} for the runs: {e.strerror or e}", file=sys.stderr)
+            return 1
+        choice.source, choice.path, choice.fallback = "fallback", DEFAULT_WORKSPACE, \
+            f"it can't be opened ({e.strerror or e})."
+        return _open_at_launch(choice)
+    try:
+        return store, RootLock(store.root)
+    except OSError:
+        if choice.source != "saved":
+            print(f"machyon ui: another Machyon UI is already using {store.root}.\n"
+                  "  Use that one, stop it, or start this one with a different --output-dir.", file=sys.stderr)
+            return 1
+        choice.source, choice.path, choice.fallback = "fallback", DEFAULT_WORKSPACE, "another Machyon UI is using it."
+        return _open_at_launch(choice)

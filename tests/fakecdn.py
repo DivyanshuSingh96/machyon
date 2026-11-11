@@ -323,6 +323,9 @@ def make_app(args):
             return web.Response(status=429, headers={"Retry-After": str(args.retry_after)})
 
         await asyncio.sleep(args.rtt)  # time to first byte
+        if args.require_referer and not request.headers.get("Referer", "").startswith(args.require_referer):
+            count(403)                   # hotlink protection: only the site's own pages may show its images
+            return web.Response(status=403, text="hotlinking not allowed")
         r = req_rng.random()
         if r < args.p_slow:
             await asyncio.sleep(args.slow_s)  # heavy tail
@@ -506,6 +509,8 @@ def build_parser():
     p.add_argument("--events-file", default=None, help="also append every event to this JSON Lines file")
     p.add_argument("--control-token", default=None,
                    help="require header X-Fakecdn-Token on /_stats, /_events and /_reset")
+    p.add_argument("--require-referer", default=None, metavar="PREFIX",
+                   help="answer 403 unless the Referer header starts with PREFIX (hotlink protection; off by default)")
     return p
 
 

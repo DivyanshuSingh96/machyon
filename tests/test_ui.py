@@ -33,7 +33,7 @@ def csv_of(cdn, n=12, bad=(3,)):
 
 
 def staged(ui):
-    return sorted(p.name for p in ui.store.staging.iterdir())
+    return sorted(p.name for p in ui.ui.staging.dir.iterdir() if p.name != ".machyon-ui.lock")
 
 
 # ------------------------------------------------------------------ security

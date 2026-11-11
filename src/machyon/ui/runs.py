@@ -11,6 +11,8 @@ Folders that don't look like runs, or whose run.json is unreadable or from a new
 """
 from __future__ import annotations
 
+import errno
+import hashlib
 import json
 import logging
 import os
@@ -28,6 +30,7 @@ RUN_ID = re.compile(r"^run_\d{4}-\d{2}-\d{2}_\d{6}_[0-9a-f]{4}$")
 STATUSES = frozenset({"running", "completed", "cancelled", "interrupted", "error"})
 SOURCE_EXTS = (".csv", ".tsv", ".txt", ".json", ".jsonl", ".ndjson", ".parquet")
 _SOURCE_FILE = re.compile(r"^source/manifest\.(csv|tsv|txt|json|jsonl|ndjson|parquet)$")
+COPY_CHUNK = 1 << 20
 _TMP_WRITE = re.compile(r"^\.(run|report)\.json\.[0-9a-f]{8}\.tmp$")   # write_json_atomic's, by its naming
 
 
@@ -53,6 +56,34 @@ def write_json_atomic(path: Path, data) -> None:
                 time.sleep(0.05 * (attempt + 1))
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def sha256_of(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(COPY_CHUNK):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def copy_verified(src: Path, dst: Path, digest: str | None = None) -> None:
+    """Copy ``src`` to ``dst`` in fixed-size chunks (a manifest can be hundreds of MB), flush it to disk, then read
+    the copy back and check it matches: ``digest`` when given, else the source's own checksum."""
+    part = dst.with_name(dst.name + ".part")
+    h = hashlib.sha256()
+    try:
+        with open(src, "rb") as fin, open(part, "wb") as fout:
+            while chunk := fin.read(COPY_CHUNK):
+                h.update(chunk)
+                fout.write(chunk)
+            fout.flush()
+            os.fsync(fout.fileno())
+        expected = digest or h.hexdigest()
+        if h.hexdigest() != expected or sha256_of(part) != expected:
+            raise OSError(errno.EIO, "the copy of the manifest doesn't match what was uploaded")
+        os.replace(part, dst)
+    finally:
+        part.unlink(missing_ok=True)
 
 
 def read_json(path: Path):
@@ -87,7 +118,7 @@ class RunStore:
     def __init__(self, root) -> None:
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
-        self.staging = self.root / ".staging"
+        self.staging = self.root / ".staging"   # where earlier versions staged uploads; removed at launch
 
     # ------------------------------------------------------------------ paths
 
@@ -158,8 +189,13 @@ class RunStore:
     def save_report(self, run_id: str, report: dict) -> None:
         write_json_atomic(self.path(run_id) / "report.json", {"schema": SCHEMA, "report": report})
 
-    def create(self, staged: Path, source: dict, settings: dict, names: str | None) -> dict:
-        """Make a run folder, move the staged manifest into it, and write its first run.json."""
+    def create(self, staged: Path, source: dict, settings: dict, names: str | None, digest: str | None = None) -> dict:
+        """Make a run folder, copy the staged manifest into it, and write its first run.json.
+
+        The staged file lives outside the workspace (possibly on another drive), so it is copied, and the copy is
+        read back and compared (with ``digest``, the SHA-256 of what was uploaded, when given) before the staged
+        file is removed. If anything fails, the run folder is removed and the staged file stays, ready to start
+        again."""
         for _ in range(20):
             run_id = f"run_{datetime.now():%Y-%m-%d_%H%M%S}_{secrets.token_hex(2)}"
             d = self.root / run_id
@@ -174,23 +210,19 @@ class RunStore:
         try:
             (d / "images").mkdir()
             (d / "source").mkdir()
-            os.replace(staged, manifest)   # same filesystem: staging lives in the root
+            copy_verified(staged, manifest, digest)
             run = {"schema": SCHEMA, "id": run_id, "created": now_iso(), "created_ts": time.time(),
                    "updated": now_iso(), "status": "running",
                    "source": {**source, "file": manifest.relative_to(d).as_posix()}, "names": names,
                    "settings": settings, "progress": None, "error": None, "history": []}
             self.save(run)
         except BaseException:
-            # Leave no half-made run behind. The manifest goes back to staging first, so the same source can be
-            # started again; if it can't be moved back, the folder is kept rather than deleting the user's file.
-            if manifest.exists() and not staged.exists():
-                try:
-                    os.replace(manifest, staged)
-                except OSError:
-                    logger.error(f"Couldn't move the manifest back from {manifest}; {d.name} is kept")
-                    raise
-            shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(d, ignore_errors=True)   # the staged manifest is untouched
             raise
+        try:
+            staged.unlink()
+        except OSError as e:   # the run is fine; the staged copy goes when the app closes
+            logger.warning(f"Couldn't remove the staged manifest {staged.name}: {e}")
         return run
 
     def recover(self) -> list[str]:
@@ -222,5 +254,5 @@ class RunStore:
         return fixed
 
     def clear_staging(self) -> None:
+        """Remove the staging folder older versions kept inside the workspace (uploads now wait outside it)."""
         shutil.rmtree(self.staging, ignore_errors=True)
-        self.staging.mkdir(exist_ok=True)

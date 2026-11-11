@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-11
+
+**Added**
+- **`machyon ui` lets you choose the workspace**, the folder every run is saved in. The home page and the New download page show it with **Change folder** and **Copy path**. Change folder opens your system's folder dialog (Tkinter, in a separate process, so it never holds up the app) or takes a typed path. Machyon checks the folder first and shows where the runs will really be written: a missing drive, a folder it can't write to, a name Windows doesn't allow, a file, a folder inside a run or one another `machyon ui` is using are refused with the reason, and a new folder is created only after you confirm. The new folder is locked and opened before the old one is let go, so a failed change leaves everything as it was; it can't happen during a download, and waits for a deletion already under way. Runs are never moved: each stays in the workspace it was made in.
+- The workspace you choose is remembered in a small settings file (`%APPDATA%\Machyon\ui.json`, `~/Library/Application Support/Machyon/ui.json` or `~/.config/machyon/ui.json`), written atomically. A settings file Machyon can't read, damaged or from a newer version, is explained and never overwritten. `--output-dir` is now for one launch: it no longer has a fixed default, and it leaves the remembered folder as it is.
+- If the remembered workspace is unavailable at launch (an external drive that isn't connected, say), the home page and the terminal say so and name the temporary folder, `~/machyon-downloads`, and nothing is downloaded there until you confirm it. The remembered choice is kept, and used again once the drive is back.
+- Links or a manifest added on the New download page survive a change of workspace: uploads now wait in a staging folder of their own, outside every workspace, and are copied into the run when the download starts, then read back and checked against the upload before the staged copy is removed.
+- **Referer** in `machyon ui`, for sites that only serve images to their own pages: under *Advanced* when starting a download, and on the Failures card when a site refused the images (403) or sent something that isn't an image. A retry with a new Referer retries those rows too, without the confirmation other permanent failures need, and the run keeps it for later retries and resumes. Failure hints in the app name this setting instead of the command-line flag.
+
 ## 1.1.1 (2026-11-11)
 
 **Fixed**

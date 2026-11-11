@@ -50,7 +50,9 @@ source, and a plain-language verdict. [Troubleshooting with the doctor](../troub
 
 Opens Machyon in your browser: a local app, served from this computer to this computer only, for pasting links or
 uploading a manifest, choosing names and settings, and watching the download. Every run is saved in its own folder
-under `--output-dir` (default `~/machyon-downloads`), so the history is still there after a restart.
+inside the workspace, so the history is still there after a restart. The workspace is the folder you last chose in
+the app (**Change folder**), or `~/machyon-downloads` until you choose one. `--output-dir` uses another folder for
+that launch only, and leaves the folder chosen in the app as it is.
 
 {{ cli_help("ui") }}
 
