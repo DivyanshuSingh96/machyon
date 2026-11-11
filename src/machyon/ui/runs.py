@@ -28,6 +28,7 @@ RUN_ID = re.compile(r"^run_\d{4}-\d{2}-\d{2}_\d{6}_[0-9a-f]{4}$")
 STATUSES = frozenset({"running", "completed", "cancelled", "interrupted", "error"})
 SOURCE_EXTS = (".csv", ".tsv", ".txt", ".json", ".jsonl", ".ndjson", ".parquet")
 _SOURCE_FILE = re.compile(r"^source/manifest\.(csv|tsv|txt|json|jsonl|ndjson|parquet)$")
+_TMP_WRITE = re.compile(r"^\.(run|report)\.json\.[0-9a-f]{8}\.tmp$")   # write_json_atomic's, by its naming
 
 
 def now_iso() -> str:
@@ -169,15 +170,27 @@ class RunStore:
                 continue
         else:
             raise RuntimeError("could not create a unique run folder")
-        (d / "images").mkdir()
-        (d / "source").mkdir()
-        rel = f"source/manifest{staged.suffix.lower()}"
-        os.replace(staged, d / rel)   # same filesystem: staging lives in the root
-        run = {"schema": SCHEMA, "id": run_id, "created": now_iso(), "created_ts": time.time(), "updated": now_iso(),
-               "status": "running",
-               "source": {**source, "file": rel}, "names": names, "settings": settings,
-               "progress": None, "error": None, "history": []}
-        self.save(run)
+        manifest = d / f"source/manifest{staged.suffix.lower()}"
+        try:
+            (d / "images").mkdir()
+            (d / "source").mkdir()
+            os.replace(staged, manifest)   # same filesystem: staging lives in the root
+            run = {"schema": SCHEMA, "id": run_id, "created": now_iso(), "created_ts": time.time(),
+                   "updated": now_iso(), "status": "running",
+                   "source": {**source, "file": manifest.relative_to(d).as_posix()}, "names": names,
+                   "settings": settings, "progress": None, "error": None, "history": []}
+            self.save(run)
+        except BaseException:
+            # Leave no half-made run behind. The manifest goes back to staging first, so the same source can be
+            # started again; if it can't be moved back, the folder is kept rather than deleting the user's file.
+            if manifest.exists() and not staged.exists():
+                try:
+                    os.replace(manifest, staged)
+                except OSError:
+                    logger.error(f"Couldn't move the manifest back from {manifest}; {d.name} is kept")
+                    raise
+            shutil.rmtree(d, ignore_errors=True)
+            raise
         return run
 
     def recover(self) -> list[str]:
@@ -185,8 +198,20 @@ class RunStore:
 
         Only one server uses a root at a time (see ``serve``), so a run still marked running at startup belongs to a
         process that has gone. Nothing is judged successful or failed here: the files and the ledger stay as they
-        are, and resuming lets Machyon itself decide what is complete.
+        are, and resuming lets Machyon itself decide what is complete. Temporary files left by a metadata write that
+        process never finished (it was killed mid-write) are removed; run.json itself is always whole.
         """
+        try:
+            entries = [e for e in os.scandir(self.root) if RUN_ID.match(e.name) and e.is_dir(follow_symlinks=False)]
+        except OSError:
+            entries = []
+        for e in entries:
+            try:
+                for f in os.scandir(e.path):
+                    if _TMP_WRITE.match(f.name) and f.is_file(follow_symlinks=False):
+                        os.unlink(f.path)
+            except OSError as err:
+                logger.warning(f"Couldn't tidy {e.name}: {err}")
         fixed = []
         for run in self.list():
             if run["status"] == "running":

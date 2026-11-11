@@ -240,14 +240,17 @@ async function refreshState() {
   return state;
 }
 
+// A job holds the server's one slot from the moment it is accepted ("starting") until its worker has ended.
+function active(job) { return !!job && (job.state === "running" || job.state === "starting"); }
+
 function setLive(job) {
   const pill = document.getElementById("live");
-  const running = job && job.state === "running";
+  const running = active(job);
   pill.hidden = !running;
   if (running) {
-    pill.href = `#/run/${job.run_id}`;
+    pill.href = job.run_id ? `#/run/${job.run_id}` : "#/";
     const p = job.progress;
-    pill.textContent = p ? (p.total ? `Downloading · ${int(p.accounted || p.downloaded + p.skipped + p.failed)} / ${int(p.total)}`
+    pill.textContent = job.state === "starting" ? (job.stopping ? "Cancelling…" : "Starting…") : p ? (p.total ? `Downloading · ${int(p.accounted || p.downloaded + p.skipped + p.failed)} / ${int(p.total)}`
                                     : `Downloading · ${int(p.downloaded + p.skipped + p.failed)}`) : "Downloading…";
   }
   clearTimeout(livePollTimer);
@@ -260,7 +263,7 @@ function setLive(job) {
 
 async function home() {
   await refreshState();
-  const job = state.job && state.job.state === "running" ? state.job : null;
+  const job = active(state.job) && state.job.run_id ? state.job : null;
   const recent = state.recent;
   return h("div", { class: "stack" },
     h("section", { class: "card hero" },
@@ -584,24 +587,24 @@ async function runPage(id) {
   const data = await api(`/api/runs/${id}`);
   const r = data.run;
   const job = (await api("/api/job")).job;
-  const live = job && job.run_id === id && job.state === "running" ? job : null;
+  const live = job && job.run_id === id && active(job) ? job : null;
   setLive(job);
-  const busy = !!(job && job.state === "running");
+  const busy = active(job);
   const resumable = ["interrupted", "cancelled", "error"].includes(r.status);
   const files = live ? null : await api(`/api/runs/${id}/files${resumable ? "?count=1" : ""}`);
 
   const actions = h("div", { class: "toolbar" },
     live ? h("span", { class: "tag run", text: live.kind === "retry" ? "Retrying" : "Downloading" }) : statusTag(r.status, r.report),
-    !live && resumable && h("button", { class: "btn primary small", type: "button", disabled: busy, onclick: () => resume(r) }, icon("play"), "Resume"),
+    !live && resumable && h("button", { class: "btn primary small", type: "button", disabled: busy, onclick: (e) => resume(r, e.currentTarget) }, icon("play"), "Resume"),
     !live && r.report && h("button", { class: "btn small", type: "button", onclick: () => saveReport(r) }, icon("download"), "Report"),
-    !live && h("button", { class: "btn small ghost", type: "button", onclick: () => remove(r) }, icon("trash"), "Delete"));
+    !live && h("button", { class: "btn small ghost", type: "button", onclick: (e) => remove(r, e.currentTarget) }, icon("trash"), "Delete"));
   const head = h("div", { class: "run-head" },
     h("div", { class: "grow" }, h("p", { class: "faint", text: `${when(r.created)} · ${r.id}` }), h("h1", { text: sourceName(r) })),
     actions);
   const view = h("div", { class: "stack" }, head);
   if (busy && !live) view.append(h("div", { class: "note" }, icon("info"), h("div", null,
     "Another download is running, so this run can't be resumed or retried until it ends. ",
-    h("a", { href: `#/run/${job.run_id}`, text: "Watch it" }))));
+    job.run_id && h("a", { href: `#/run/${job.run_id}`, text: "Watch it" }))));
 
   if (live) view.append(liveCard(id, live));
   else if (r.report) view.append(reportCard(r.report, data.history));
@@ -614,12 +617,16 @@ async function runPage(id) {
   return view;
 }
 
-async function resume(r) {
+// Buttons that start or remove something are disabled while their request is on its way, so a double click sends
+// it once. The server refuses a second one anyway: this only spares the user an error message.
+async function resume(r, btn) {
   const ok = await ask({ title: "Resume this run?", ok: "Resume",
     text: "Machyon downloads the rest with the same manifest, file names and settings, into the same folder. " +
           "Files already on disk are kept and skipped." });
-  if (!ok) return;
-  try { await api(`/api/runs/${r.id}/resume`, { method: "POST", json: {} }); say("Resumed"); route(); } catch (e) { toast(e.message); }
+  if (!ok || btn.disabled) return;
+  btn.disabled = true;
+  try { await api(`/api/runs/${r.id}/resume`, { method: "POST", json: {} }); say("Resumed"); route(); }
+  catch (e) { btn.disabled = false; toast(e.message); }
 }
 
 async function saveReport(r) {
@@ -634,18 +641,20 @@ async function saveReport(r) {
   } catch (e) { toast(e.message); }
 }
 
-async function remove(r) {
+async function remove(r, btn) {
   const input = h("input", { type: "text", autocomplete: "off", spellcheck: false, "aria-label": "Type delete to confirm" });
   const ok = await ask({ title: "Delete this run?", ok: "Delete for good", danger: true,
     text: `This removes its folder from your computer: every downloaded image, the manifest copy and the report. It can't be undone.`,
     extra: h("label", { class: "field" }, h("span", null, "Type ", h("code", { text: "delete" }), " to confirm"), input) });
   if (!ok) return;
   if (input.value.trim().toLowerCase() !== "delete") { toast("Not deleted: type delete to confirm."); return; }
+  if (btn.disabled) return;
+  btn.disabled = true;
   try {
     await api(`/api/runs/${r.id}`, { method: "DELETE", json: { confirm: r.id } });
     toast("Run deleted");
     location.hash = "#/history";
-  } catch (e) { toast(e.message); }
+  } catch (e) { btn.disabled = false; toast(e.message); }
 }
 
 async function openFolder(r, what) {
@@ -679,10 +688,19 @@ function liveCard(id, job) {
     if (!await ask({ title: "Stop this download?", ok: "Stop", danger: true,
       text: "Every file already on disk stays complete. Rows that didn't finish are recorded as interrupted, and you can resume the run later." })) return;
     stopBtn.disabled = true;
-    try { await api("/api/job/stop", { method: "POST", json: {} }); toast("Stopping…"); } catch (e) { toast(e.message); }
+    try {
+      const j = (await api("/api/job/stop", { method: "POST", json: {} })).job;
+      toast(j && j.state === "starting" ? "Cancelling: the download won't begin." : "Stopping…");
+    } catch (e) { toast(e.message); }
   }
 
   function draw(job) {
+    stopBtn.disabled = !!job.stopping;
+    if (job.state === "starting") {
+      phase.textContent = job.stopping ? "Cancelling: the download is still starting, and it won't begin." : "Starting…";
+      big.replaceChildren("0"); meter.classList.add("unknown"); meter.replaceChildren(h("i"));
+      return;
+    }
     const p = job.progress;
     if (!p) { phase.textContent = "Reading the manifest…"; big.replaceChildren("0"); meter.classList.add("unknown"); meter.replaceChildren(h("i")); return; }
     const done = p.downloaded + p.skipped + p.failed;
@@ -727,7 +745,7 @@ function liveCard(id, job) {
     try {
       const j = (await api("/api/job")).job;
       setLive(j);
-      if (!j || j.run_id !== id || j.state !== "running") { route(); return; }   // finished: show the report
+      if (!j || j.run_id !== id || !active(j)) { route(); return; }   // finished: show the report
       draw(j);
     } catch (e) { if (e.status === 401) return; }
     pollTimer = setTimeout(poll, document.hidden ? 2000 : 500);
@@ -843,11 +861,13 @@ function failuresCard(r, f, busy) {
         text: "These failed in a way a retry normally can't fix (a 404, a page that isn't an image…). Machyon will ask the servers again anyway." });
       if (!ok) return;
     } else if (!f.retryable) { toast("Only permanent failures are left: tick the box to retry them anyway."); return; }
+    if (retryBtn.disabled) return;
+    retryBtn.disabled = true;
     try {
       await api(`/api/runs/${r.id}/retry`, { method: "POST", json: { include_permanent: withPermanent, confirm: withPermanent } });
       say("Retrying");
       route();
-    } catch (e) { toast(e.message); }
+    } catch (e) { retryBtn.disabled = false; toast(e.message); }
   }
   return h("section", { class: "card" },
     h("div", { class: "card-head" }, h("h2", { class: "grow", text: "Failures" }), retryBtn),

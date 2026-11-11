@@ -95,10 +95,16 @@ class UIServer:
             time.sleep(0.1)
         raise TimeoutError("the job didn't finish")
 
+    def call(self, fn, *args):
+        """Run ``fn(*args)`` on the server's loop and return its result (a coroutine function is awaited)."""
+        async def run():
+            r = fn(*args)
+            return await r if asyncio.iscoroutine(r) else r
+        return asyncio.run_coroutine_threadsafe(run(), self.loop).result(60)
+
     def close(self):
-        if self.ui.busy():
-            self.ui.worker.stop("interrupted")
-            self.ui.worker.thread.join(30)
+        """The same order as ``machyon ui`` on Ctrl+C: stop the job, wait for its worker to end, then close."""
+        self.call(self.ui.shutdown)
         asyncio.run_coroutine_threadsafe(self.runner.cleanup(), self.loop).result(10)
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join(10)

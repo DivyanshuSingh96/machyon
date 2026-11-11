@@ -72,7 +72,13 @@ machyon ui --max-upload-mb 1024         # accept larger manifests
 ```
 
 Without `--port`, Machyon uses 8765, or any free port if 8765 is taken, and prints the address. Press **Ctrl+C**
-in the terminal to stop it; a running download stops cleanly and can be resumed next time.
+in the terminal to stop it: a running download stops cleanly, every file on disk stays complete, and the run can
+be resumed next time. Machyon waits for the download to finish stopping before it exits. If you can't wait, press
+**Ctrl+C** again to quit at once; the run is then listed as interrupted the next time you start `machyon ui`, ready
+to resume.
+
+`machyon ui` runs one download at a time. While one is running, or still starting, starting another, retrying or
+resuming is refused until it ends; deleting other runs still works.
 
 ## Safety
 

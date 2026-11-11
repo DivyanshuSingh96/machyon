@@ -236,6 +236,14 @@ def test_one_download_at_a_time_and_stopping_it(ui, cdn):
 
 # ------------------------------------------------------------------ persistence
 
+class _Gone:
+    def save(self, run):
+        pass
+
+    def save_report(self, run_id, report):
+        pass
+
+
 def test_history_survives_a_restart_and_a_dead_server_s_run_is_interrupted(tmp_path, cdn):
     c = cdn("--rtt", "0.4")
     a = UIServer(tmp_path / "runs")
@@ -243,8 +251,9 @@ def test_history_survives_a_restart_and_a_dead_server_s_run_is_interrupted(tmp_p
     a.wait_job()
     running = start(a, csv_of(c, 60, bad=()), names="", concurrency=2, adaptive=False)
     time.sleep(1)
-    # The server dies without stopping its download: run.json still says "running".
-    a.ui.worker = None
+    # The server dies without stopping its download: from here on its worker writes nothing, as if the process
+    # had gone, so run.json still says "running".
+    a.ui.reservation.worker.store = _Gone()
     a.close()
     data = json.loads((a.store.path(running) / "run.json").read_text())
     assert data["status"] == "running"
