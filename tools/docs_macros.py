@@ -234,7 +234,7 @@ def define_env(env) -> None:
                             f'<span class="track"><span class="fill" style="width:{100 * r["img_per_s"] / top:.1f}%"></span></span>'
                             f'<span class="val">{r["img_per_s"]:,.0f} img/s</span><small>{note}</small></div>')
             n = got[0][2]["n"]
-            groups.append(f'<div class="mx-bar-group"><h4>{html.escape(SCENARIO_NAMES[sc])} · {n:,} images</h4>{"".join(bars)}</div>')
+            groups.append(f'<div class="mx-bar-group"><p class="mx-bar-title">{html.escape(SCENARIO_NAMES[sc])} · {n:,} images</p>{"".join(bars)}</div>')
         return (f'<figure class="mx-bars">{"".join(groups)}<figcaption>Local fault-injecting test CDN, every file checked '
                 f'byte for byte. Missing: rows that could have succeeded but have no file. Bogus: files that aren\'t the '
                 f'image. Full method and every scenario on the benchmarks page.</figcaption></figure>')

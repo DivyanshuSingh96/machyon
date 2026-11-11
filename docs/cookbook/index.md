@@ -11,7 +11,7 @@ calls it makes, and shows the output of a real run.</p>
 
 <div class="mx-card" markdown>
 
-### [Build your first image dataset](first-dataset.md)
+## [Build your first image dataset](first-dataset.md)
 
 Beginner. Turn a CSV of image links into folders sorted by category, a report, and a gallery to browse. One
 `machyon.download()` call does the downloading.
@@ -20,7 +20,7 @@ Beginner. Turn a CSV of image links into folders sorted by category, a report, a
 
 <div class="mx-card" markdown>
 
-### [Amazon ML Challenge](../getting-started/amazon-ml-challenge.md)
+## [Amazon ML Challenge](../getting-started/amazon-ml-challenge.md)
 
 The same idea for a real competition dataset: 263,859 rows, the starter kit's file names, and resuming when a
 notebook disconnects.
@@ -29,7 +29,7 @@ notebook disconnects.
 
 <div class="mx-card" markdown>
 
-### [Download images in Google Colab](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb)
+## [Download images in Google Colab](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb)
 
 Beginner, nothing to install. A notebook with a form: paste links or upload a CSV, pick how files are named,
 then browse a gallery, see why anything failed, retry, and take the images as a ZIP or to Google Drive.

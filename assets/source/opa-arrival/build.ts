@@ -60,9 +60,10 @@ async function exportGlb(): Promise<Uint8Array> {
 const glb = await exportGlb();
 mkdirSync(resolve(docs, 'opa'), {recursive: true});
 writeFileSync(resolve(docs, 'opa/opa.glb'), glb);
-await build({
-  entryPoints: [resolve(here, 'src/arrival.ts')], outfile: resolve(docs, 'js/opa-arrival.js'),
-  bundle: true, minify: true, format: 'iife', target: 'es2020', legalComments: 'eof', logLevel: 'warning',
-  banner: {js: '/* Opa\'s arrival on the homepage. Built from assets/source/opa-arrival (npm run build); do not edit. */'},
-});
-console.log(`opa.glb ${glb.byteLength} bytes; opa-arrival.js written`);
+// The page's side (small, no three.js) and the renderer (three.js), which runs in a worker or, failing that, the page.
+const common = {bundle: true, minify: true, format: 'iife', target: 'es2020', legalComments: 'eof', logLevel: 'warning'} as const;
+await build({...common, entryPoints: [resolve(here, 'src/arrival.ts')], outfile: resolve(docs, 'js/opa-arrival.js'),
+  banner: {js: '/* Opa\'s arrival on the homepage. Built from assets/source/opa-arrival (npm run build); do not edit. */'}});
+await build({...common, entryPoints: [resolve(here, 'src/render.ts')], outfile: resolve(docs, 'js/opa-arrival-render.js'),
+  banner: {js: '/* Opa\'s arrival: the renderer, in a worker or the page. Built from assets/source/opa-arrival (npm run build); do not edit. */'}});
+console.log(`opa.glb ${glb.byteLength} bytes; opa-arrival.js and opa-arrival-render.js written`);

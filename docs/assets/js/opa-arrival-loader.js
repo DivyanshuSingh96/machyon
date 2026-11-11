@@ -3,8 +3,9 @@
    It plays on the homepage only, once per visit: the first time the homepage is shown in a tab, and again only
    after a reload. Moving around the site (and coming back) never replays it. It never plays with reduced motion,
    with the browser's data saver, without WebGL2, or when the logo is not on screen. Everything it needs
-   (opa-arrival.js and opa.glb, about 230 KB compressed) is fetched only when it is going to play, and leaving the
-   homepage mid-flight removes it at once. The page never waits for it. */
+   (opa-arrival.js, opa-arrival-render.js and opa.glb, about 230 KB compressed) is fetched only when it is going to
+   play, and leaving the homepage mid-flight removes it at once. The page never waits for it, and the drawing runs
+   in a worker where the browser allows. */
 (() => {
   "use strict";
   const KEY = "mx-opa-arrived";

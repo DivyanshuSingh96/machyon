@@ -39,6 +39,8 @@ Set an option in any of these ways; they all end up in the same [`DownloadConfig
     `DownloadConfig.from_ini("machyon.ini")`, or `machyon --config machyon.ini`. Keys are field names, in any
     case. Dictionary options (`headers`) can't be set from INI files; pass them in code or with `--header`.
 
+## All options
+
 A flag shown as `--no-adaptive` turns a `True` default off. Options without a flag are available from Python and
 INI files only.
 

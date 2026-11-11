@@ -1,0 +1,8 @@
+{#- The theme's logo partial, with the lockup's own proportions (its viewBox, 2595.8 x 696.4) as width and height,
+    so the browser reserves the right space before the SVG arrives. machyon.css sets the shown size. -#}
+{% if config.theme.logo %}
+  <img src="{{ config.theme.logo | url }}" alt="{{ config.site_name }}" width="2596" height="696">
+{% else %}
+  {% set icon = config.theme.icon.logo or "material/library" %}
+  {% include ".icons/" ~ icon ~ ".svg" %}
+{% endif %}

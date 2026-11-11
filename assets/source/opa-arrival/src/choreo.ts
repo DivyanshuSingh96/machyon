@@ -10,7 +10,8 @@ import {Pt, measure, along, lerp} from './geom';
 import {Pose, blend, SWIM} from './rig';
 import {TURN} from './poses';
 import {B, BONES, BIND, SEG, SPINE, BODY_LEN, FLAP_S, NECK, EYE_DEF, PUPIL_DIR, HOSE_N, P} from './rigdata';
-import {T, turnA, curl, exact, END, FADE, filmAt, filmHeadAt, SWIM_L, smooth, prog, clamp01} from './film';
+import {T, turnA, curl, exact, END, filmAt, filmHeadAt, SWIM_L, smooth, prog, clamp01} from './film';
+import {fadeAt} from './timeline';
 
 export type Measure = {vw: number; vh: number; word: {l: number; t: number; r: number; b: number}; ctm: {a: number; e: number; f: number}};
 const V = (x = 0, y = 0, z = 0) => new Vector3(x, y, z);
@@ -376,7 +377,7 @@ export class Choreo {
     return {
       bones: out, head: p, flat, zScale: 1 - 0.9 * flat, outline: 6.5 * k,                // the logo's gap width
       haze: lam > 1 ? 0.65 * clamp01(Math.log(lam) / Math.log(this.lam0)) : 0,
-      opacity: smooth(t / T.appear) * (1 - prog(t, END - FADE, END, smooth)), logo: prog(t, END - FADE, END, smooth),
+      ...fadeAt(t),                                                                   // canvas opacity, logo cross-fade
     };
   }
   get duration() { return END; }
