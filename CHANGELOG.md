@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-11
+
+**Fixed**
+- `tools/bench_ui_checkpoints.py`, the benchmark for how `machyon ui` saves a download's progress, measured download speed over the whole job, including the final saves made after the last image arrived; it now measures while the images download. It also left every trial's images in the temp folder (20,000 per trial by default), ran all the trials of one write delay before moving to the next, read peak memory as 0 on Windows, and timed the event loop there with a clock that only ticks every 15.6 ms. Each trial now deletes its images, the delays take turns, and Windows memory and timings are read correctly. `--repo` points it at another checkout, so two versions can be measured side by side.
+
+**Documentation**
+- Measured again with the fixed benchmark (20,000 images from the local test server, median of three runs). On Linux, slowing every `run.json` write by 1 second cut 1.1.1's download speed from 1,466 to 667 images/s and stalled its download loop for up to 1.02 s, while 1.2.0 kept its speed (1,336 and 1,366 images/s) and its loop's worst delay at 0.09 s. On Windows 10, a `run.json` write takes 69 ms at the median and up to 0.32 s, and 1.1.1 made one on the download loop every 2 seconds; with 1.2.0 the loop's worst delay stayed at 0.12 s even with each write slowed to 1.4 s.
+
 ## 1.2.0 (2026-11-11)
 
 **Added**

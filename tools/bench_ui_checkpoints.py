@@ -2,6 +2,7 @@
 
     python tools/bench_ui_checkpoints.py                      # 20,000 images, 3 runs per disk delay
     python tools/bench_ui_checkpoints.py --delays 0,250,1000 --images 20000 --runs 3 --out results.jsonl
+    python bench_ui_checkpoints.py --repo path/to/machyon     # measure another checkout (an older commit, say)
 
 Each trial is a real `machyon ui` download job (the UI's own Worker, RunStore and run.json) of N images from the
 local test CDN (tests/fakecdn.py), in a fresh process so CPU time and peak memory belong to that trial alone.
@@ -9,11 +10,13 @@ While it runs, a probe on the download's own event loop measures how late its ti
 blocking write costs every download in flight. ``--delays`` adds that many milliseconds to every run.json write,
 to stand in for a slow disk, a network drive, or an antivirus scan holding the file; 0 is the disk as it is.
 
-Run it on the code before and after a change (for example ``git switch v1.1.1`` and back), on the systems that
-matter: Windows numbers come from Windows, not from Linux.
+To compare two versions, keep a copy of this file outside the checkout and point ``--repo`` at the checkout as it is
+before and after the change. Measure on the systems that matter: Windows numbers come from Windows, not from Linux.
+The delays take turns (0, 250, 1000, 0, 250, ...), so a computer that slows down as it goes doesn't make one delay
+look worse than another, and each trial deletes its images when it ends.
 
-Reported per delay (median of the runs): images/s, the run.json writes and how long each took, the event loop's
-lateness (p50, p99, worst), CPU seconds and peak memory.
+Reported per delay (median of the runs): images/s while downloading (from the Report), the run.json writes and how
+long each took, the event loop's lateness while downloading (p50, p99, worst), CPU seconds and peak memory.
 """
 from __future__ import annotations
 
@@ -21,15 +24,17 @@ import argparse
 import json
 import os
 import platform
+import shutil
 import socket
 import statistics
 import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]   # the checkout measured; --repo changes it
 PROBE_S = 0.005
 
 
@@ -54,8 +59,11 @@ def peak_rss_mb() -> float | None:
                         ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
         pmc = PMC()
         pmc.cb = ctypes.sizeof(PMC)
-        if ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(pmc),
-                                                    pmc.cb):
+        kernel32, psapi = ctypes.WinDLL("kernel32"), ctypes.WinDLL("psapi")
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE      # a 64-bit handle: the default int truncates it
+        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        if psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb):
             return pmc.PeakWorkingSetSize / 2**20
         return None
     import resource
@@ -96,11 +104,12 @@ def trial(images: int, delay_ms: float, cdn_port: int) -> dict:
     lags: list[tuple[float, float]] = []
 
     async def probe():
-        loop = asyncio.get_running_loop()
+        # perf_counter, not the loop's clock: on Windows that one ticks every 15.6 ms, too coarse to measure with.
+        # Windows timers also fire on that tick, so there a few ms of lateness at the median are the clock, not Machyon.
         while True:
-            t = loop.time()
+            t = time.perf_counter()
             await asyncio.sleep(PROBE_S)
-            lags.append((time.time(), loop.time() - t - PROBE_S))
+            lags.append((time.time(), time.perf_counter() - t - PROBE_S))
 
     cpu0, t0 = time.process_time(), time.perf_counter()
     worker.start()
@@ -115,8 +124,11 @@ def trial(images: int, delay_ms: float, cdn_port: int) -> dict:
     end = report.get("end_time") or float("inf")
     lags = sorted(lag for t, lag in lags if t <= end)
     q = (lambda p: lags[min(len(lags) - 1, int(p * len(lags)))] * 1000) if lags else (lambda p: None)
+    shutil.rmtree(tmp, ignore_errors=True)          # 20,000 images a trial add up: don't leave them behind
     return {"delay_ms": delay_ms, "images": images, "downloaded": report.get("downloaded"),
-            "state": worker.state, "wall_s": round(wall, 3), "img_per_s": round(images / wall, 1),
+            "state": worker.state, "wall_s": round(wall, 3),
+            # While downloading (the Report's own clock), not until the job ends: the final save comes after it.
+            "img_per_s": round(images / report["duration"], 1) if report.get("duration") else None,
             "writes": len(writes), "write_ms_median": round(statistics.median(writes) * 1000, 2) if writes else None,
             "write_ms_max": round(max(writes) * 1000, 2) if writes else None,
             "skipped_unchanged": getattr(worker, "unchanged", None),
@@ -131,14 +143,18 @@ def main() -> int:
     ap.add_argument("--delays", default="0,250,1000", help="added ms per run.json write, comma-separated")
     ap.add_argument("--rtt", default="0.02", help="the test CDN's time to first byte, in seconds")
     ap.add_argument("--out", help="also append every trial to this JSON Lines file")
+    ap.add_argument("--repo", help="the Machyon checkout to measure (default: the one this file is in)")
     ap.add_argument("--trial", nargs=3, metavar=("IMAGES", "DELAY_MS", "PORT"), help=argparse.SUPPRESS)
     a = ap.parse_args()
+    global ROOT
+    if a.repo:
+        ROOT = Path(a.repo).resolve()
     if a.trial:
         print(json.dumps(trial(int(a.trial[0]), float(a.trial[1]), int(a.trial[2]))))
         return 0
 
-    sys.path.insert(0, str(ROOT / "src"))
-    from machyon import __version__
+    with open(ROOT / "pyproject.toml", "rb") as f:   # the checkout's own version, not whatever is installed
+        version = tomllib.load(f)["project"]["version"]
     port = free_port()
     cdn = subprocess.Popen([sys.executable, str(ROOT / "tests" / "fakecdn.py"), "--port", str(port), "--rtt", a.rtt,
                             "--handshake", "0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -151,24 +167,28 @@ def main() -> int:
                 time.sleep(0.05)
         commit = subprocess.run(["git", "-C", str(ROOT), "describe", "--always", "--dirty", "--tags"],
                                 capture_output=True, text=True, encoding="utf-8").stdout.strip()
-        env = {"machyon": __version__, "commit": commit, "python": platform.python_version(),
+        env = {"machyon": version, "commit": commit, "python": platform.python_version(),
                "platform": platform.platform(), "cpus": os.cpu_count(), "rtt": a.rtt}
         print(json.dumps(env))
-        rows = []
-        for delay in [float(d) for d in a.delays.split(",")]:
-            trials = []
-            for _ in range(a.runs):
-                out = subprocess.run([sys.executable, __file__, "--trial", str(a.images), str(delay), str(port)],
-                                     capture_output=True, text=True, encoding="utf-8", check=True)
+        delays = [float(d) for d in a.delays.split(",")]
+        trials: dict[float, list[dict]] = {d: [] for d in delays}
+        for _ in range(a.runs):
+            for delay in delays:                      # in turns, so drift over time hits every delay alike
+                out = subprocess.run([sys.executable, __file__, "--repo", str(ROOT), "--trial", str(a.images),
+                                      str(delay), str(port)], capture_output=True, text=True, encoding="utf-8",
+                                     check=True)
                 t = {**json.loads(out.stdout.strip().splitlines()[-1]), **env}
-                trials.append(t)
+                trials[delay].append(t)
                 if a.out:
                     with open(a.out, "a", encoding="utf-8") as f:
                         f.write(json.dumps(t) + "\n")
-            med = {k: statistics.median([t[k] for t in trials if t[k] is not None] or [0])
+        rows = []
+        for delay in delays:
+            ts = trials[delay]
+            med = {k: statistics.median([t[k] for t in ts if t[k] is not None] or [0])
                    for k in ("img_per_s", "writes", "write_ms_median", "write_ms_max", "lag_ms_p50", "lag_ms_p99",
                              "lag_ms_max", "cpu_s", "peak_rss_mb")}
-            rows.append((delay, med, [t["state"] for t in trials]))
+            rows.append((delay, med, [t["state"] for t in ts]))
         print(f"\n{a.images} images, median of {a.runs} runs, Machyon {env['machyon']} ({commit}), {env['platform']}")
         print(f"{'delay':>6} {'img/s':>8} {'writes':>6} {'write ms':>9} {'worst':>8} {'lag p50':>8} {'lag p99':>8} "
               f"{'lag max':>8} {'CPU s':>6} {'RSS MB':>7}")
