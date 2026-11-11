@@ -13,3 +13,4 @@ build/
 machyon-docs-site*/
 images/
 metrics/
+node_modules/

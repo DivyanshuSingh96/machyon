@@ -1,0 +1,18 @@
+{
+  "name": "machyon-opa-arrival",
+  "private": true,
+  "type": "module",
+  "description": "Builds the homepage's Opa arrival: docs/assets/opa/opa.glb and docs/assets/js/opa-arrival.js",
+  "scripts": {
+    "build": "tsx build.ts"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "esbuild": "0.28.2",
+    "meshoptimizer": "1.2.0",
+    "three": "0.187.0",
+    "tsx": "4.23.15"
+  }
+}
