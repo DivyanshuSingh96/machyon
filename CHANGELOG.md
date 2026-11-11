@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 2026-11-11
 
 **Documentation**
+- The homepage has an arrival: Opa flies in from far behind the page toward the visitor, banks across the screen, turns above the "n" and curls into the logo, about 14.5 seconds in all. It plays once per visit (again after a reload), only on the homepage, never with reduced motion or the data saver, and never blocks the page: it takes no clicks, "Skip intro" or Esc ends it, and leaving the page removes it. Its 230 KB (compressed) download happens only when it plays. Without WebGL2 the logo simply appears as before.
 - The text column is centred whenever no sidebar sits beside it. Between about 800 and 1,220 px wide, pages hugged the left edge and left an empty strip on the right where the contents would go; the breadcrumb follows the column.
 - On phones and small windows, code blocks keep the same side margins as the text instead of running edge to edge, with their rounded corners.
 - Nothing pushes a page sideways on narrow phones any more: card grids shrink to the screen (the Cookbook, the Lab and the home page at 320 px), the simulator's controls wrap and its decision table scrolls inside its card, and the header fits at 280 px.

@@ -18,7 +18,7 @@ _snippets/
 """
 
 extra_css = ["assets/css/machyon.css"]
-extra_javascript = ["assets/js/toc-pin.js", "assets/js/tables.js", "assets/js/engine-sim.js", "assets/js/opa-404.js", "assets/js/lab/recording.js", "assets/js/lab/adaptive-lab.js"]
+extra_javascript = ["assets/js/toc-pin.js", "assets/js/tables.js", "assets/js/engine-sim.js", "assets/js/opa-404.js", "assets/js/opa-arrival-loader.js", "assets/js/lab/recording.js", "assets/js/lab/adaptive-lab.js"]
 
 nav = [
   { "Home" = "index.md" },

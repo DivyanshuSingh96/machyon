@@ -728,3 +728,13 @@ body {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
   .mx-card:hover, .md-typeset .md-button:hover { transform: none; }
 }
+
+/* Opa's arrival on the homepage (assets/js/opa-arrival-loader.js, built from assets/source/opa-arrival).
+   While Opa flies in, the logo's own symbol waits; the canvas takes no clicks and scrolls with the page. */
+html.mx-arriving .mx-hero-mark .mx-opa { visibility: hidden; }
+.mx-arrival { position: absolute; z-index: 3; pointer-events: none; }
+.mx-arrival-skip { position: fixed; right: 1rem; bottom: 1rem; z-index: 5; padding: .55rem .9rem; border-radius: 999px;
+  font: 600 .7rem/1 var(--mx-head-font); color: var(--mx-ink); background: var(--mx-glass); border: 1px solid var(--mx-line);
+  box-shadow: 0 .2rem .8rem rgba(var(--mx-shadow-rgb), .14); backdrop-filter: blur(6px); cursor: pointer; }
+.mx-arrival-skip:hover { background: var(--mx-chip); color: var(--mx-chip-ink); }
+.mx-arrival-skip:focus-visible { outline: 2px solid var(--mx-focus); outline-offset: 2px; }

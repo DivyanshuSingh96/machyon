@@ -265,3 +265,46 @@ def test_every_script_the_site_loads_exists():
     scripts = re.findall(r'"(assets/js/[^"]+\.js)"', config)
     assert {"assets/js/toc-pin.js", "assets/js/tables.js"} <= set(scripts)
     assert all((ROOT / "docs" / s).is_file() for s in scripts)
+
+
+OPA = ROOT / "docs" / "assets"
+
+
+def test_opa_arrival_is_loaded_only_through_its_loader():
+    # Every page gets the small loader; the player and the model are fetched by it, and only when it will play.
+    config = (ROOT / "zensical.toml").read_text(encoding="utf-8")
+    assert "assets/js/opa-arrival-loader.js" in config
+    assert "assets/js/opa-arrival.js" not in config
+    loader = (OPA / "js" / "opa-arrival-loader.js").read_text(encoding="utf-8")
+    for needle in (".mx-hero-mark", "prefers-reduced-motion: reduce", "saveData", "WebGL2RenderingContext",
+                   "sessionStorage", '"reload"', "opa-arrival.js", "../opa/opa.glb", "document$"):
+        assert needle in loader, needle
+
+
+def test_opa_arrival_bundle_is_self_contained_and_within_budget():
+    bundle = (OPA / "js" / "opa-arrival.js").read_text(encoding="utf-8")
+    assert "MachyonOpaArrival" in bundle
+    # no CDN: the only URL is the XHTML namespace three.js uses to create a canvas element
+    assert set(re.findall(r"https?://[\w./-]+", bundle)) <= {"http://www.w3.org/1999/xhtml"}
+    assert "SPDX-License-Identifier: MIT" in bundle          # three.js's licence travels with it
+    assert len(bundle.encode()) < 800_000
+
+
+def test_opa_model_is_a_compressed_glb_with_the_approved_skeleton():
+    data = (OPA / "opa" / "opa.glb").read_bytes()
+    assert data[:4] == b"glTF" and int.from_bytes(data[4:8], "little") == 2
+    assert len(data) < 150_000
+    size = int.from_bytes(data[12:16], "little")
+    gltf = json.loads(data[20:20 + size])
+    assert "EXT_meshopt_compression" in gltf["extensionsUsed"]
+    joints = {gltf["nodes"][j]["name"] for skin in gltf["skins"] for j in skin["joints"]}
+    assert len(joints) == 59
+    assert {"Head", "Spine_00", "Spine_15", "Eye_5", "EyeStalk_5", "Proboscis_5", "Claw_Upper", "Flap_L9", "TailFin_R3"} <= joints
+
+
+def test_opa_arrival_sources_are_kept():
+    src = ROOT / "assets" / "source" / "opa-arrival"
+    pkg = json.loads((src / "package.json").read_text(encoding="utf-8"))
+    assert pkg["devDependencies"]["three"] == "0.187.0"
+    assert (src / "package-lock.json").is_file() and (src / "build.ts").is_file()
+    assert {p.name for p in (src / "src").glob("*.ts")} >= {"arrival.ts", "choreo.ts", "film.ts", "model.ts", "player.ts", "rig.ts"}
