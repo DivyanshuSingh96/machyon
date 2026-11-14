@@ -22,6 +22,8 @@ speed, retries what can recover, keeps only real images, and tells you exactly w
   <a class="md-button" href="reliability/zero-lost/">The zero-lost contract</a>
 </div>
 
+<p class="mx-watch"><a href="project/film/"><span aria-hidden="true">▶</span> Watch the film <span class="mx-watch-time">1:44</span></a></p>
+
 <p class="mx-hackathon">No Python setup? <a href="https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb">Open Machyon in Google Colab</a>: paste links or upload a CSV, get a ZIP back.</p>
 
 <p class="mx-hackathon">In the Amazon ML Challenge? <a href="getting-started/amazon-ml-challenge/">Here's the one cell to paste</a>.</p>

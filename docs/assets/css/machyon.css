@@ -761,3 +761,41 @@ html.mx-arriving .mx-hero-mark .mx-opa-ghost * { animation: none; }
 }
 .md-typeset mark[data-md-highlight].mx-hl-out { background-color: transparent; box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .md-typeset mark[data-md-highlight] { transition: none; } }
+
+/* The product film page (project/film.md, overrides/film.html): the film with its chapters beside it on wide screens,
+   below it on narrow ones. On wide screens the list is as tall as the film and scrolls inside itself. */
+/* the homepage's link to it, under the hero buttons */
+.md-typeset .mx-watch { margin: -.3rem 0 1.1rem; font-size: .78rem; }
+.md-typeset .mx-watch a { color: var(--mx-muted); text-decoration: none; font-weight: 600; }
+.md-typeset .mx-watch a:hover { color: var(--mx-ink); }
+.md-typeset .mx-watch .mx-watch-time { font-family: var(--md-code-font-family); font-size: .68rem; font-weight: 400;
+  padding: .05rem .4rem; margin-left: .2rem; border-radius: 999px; background: var(--mx-band2); }
+.md-content:has(.mx-film-stage) { --mx-measure: 64rem; }            /* room for a large film beside its chapters */
+.md-content:has(.mx-film-stage) .md-content__inner > :is(p, h2, h3, .mx-film-transcript) { max-width: 46rem; }
+.md-typeset .mx-film-lead { font-size: .9rem; color: var(--mx-muted); margin: -.4rem 0 1.1rem; max-width: 46rem; }
+.mx-film-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin: 0 0 2rem; }
+.mx-film-stage .mx-film { display: block; aspect-ratio: 16 / 9; background: #0B0D12; }
+.mx-film-chapters { background: var(--mx-surface); border-radius: var(--mx-radius); box-shadow: var(--mx-shadow); }
+.md-typeset .mx-film-chapters ol { list-style: none; margin: 0; padding: .35rem; }
+.md-typeset .mx-film-chapters ol li { margin-left: 0; }
+.md-typeset .mx-film-chapters li { margin: 0; padding: .45rem .6rem .5rem; border-radius: var(--mx-radius-sm);
+  transition: background-color .25s var(--mx-ease); }
+.md-typeset .mx-film-chapters li + li { margin-top: .1rem; }
+.md-typeset .mx-film-chapters li[aria-current="true"] { background: var(--mx-chip); }
+.md-typeset .mx-film-chapters li[aria-current="true"] .mx-film-time { background: var(--mx-accent); color: var(--mx-accent-ink); }
+.md-typeset a.mx-film-jump { display: flex; align-items: baseline; gap: .55rem; color: var(--mx-ink); text-decoration: none; }
+.md-typeset a.mx-film-jump:hover .mx-film-title { text-decoration: underline; text-underline-offset: .2em; }
+.mx-film-time { flex: none; font-family: var(--md-code-font-family); font-size: .64rem; font-variant-numeric: tabular-nums;
+  padding: .05rem .4rem; border-radius: 999px; background: var(--mx-band2); color: var(--mx-muted); }
+.mx-film-title { font-weight: 700; font-size: .78rem; line-height: 1.4; }
+.md-typeset .mx-film-chapters p { margin: .2rem 0 .15rem; font-size: .7rem; line-height: 1.55; color: var(--mx-muted); }
+.md-typeset .mx-film-chapters .mx-film-more { font-size: .68rem; font-weight: 600; }
+.md-typeset .mx-film-transcript a.mx-film-jump { display: inline; font-family: var(--md-code-font-family); font-size: .7rem;
+  color: var(--mx-muted); margin-right: .35rem; }
+.md-typeset .mx-film-transcript .mx-film-note { color: var(--mx-muted); }
+@media screen and (min-width: 60em) {
+  .mx-film-stage { grid-template-columns: minmax(0, 2.1fr) minmax(min(16rem, 100%), 1fr); align-items: stretch; }
+  .mx-film-chapters { position: relative; min-height: 0; }
+  .md-typeset .mx-film-chapters ol { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; }
+}
+@media (prefers-reduced-motion: reduce) { .md-typeset .mx-film-chapters li { transition: none; } }

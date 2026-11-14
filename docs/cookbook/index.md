@@ -32,7 +32,8 @@ notebook disconnects.
 ## [Download images in Google Colab](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb)
 
 Beginner, nothing to install. A notebook with a form: paste links or upload a CSV, pick how files are named,
-then browse a gallery, see why anything failed, retry, and take the images as a ZIP or to Google Drive.
+then browse a gallery and see why anything failed. If a site refuses the images, set a Referer, check a failing link
+step by step, and retry. Take the images as a ZIP or to Google Drive.
 
 [:simple-googlecolab: Open in Colab](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb){ .md-button }
 

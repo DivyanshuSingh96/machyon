@@ -4,10 +4,13 @@
 
 **Added**
 
+- **Machyon in 104 seconds**, the product film, has a page of its own in the documentation (Project, next to Meet Opa). Eight chapters sit beside the film; each jumps to its moment and links to the page that explains it. It has English captions, a transcript and a note on what is real in the film: the app and the numbers come from one recorded run against a local test server, and the animated scenes are illustrations. Nothing downloads until play is pressed: 1080p on wide screens (16 MB), 720p on narrow ones (8 MB). A chapter link such as `?t=35` cues the film there, and the page's structured data lists the chapters as clips for search results. The homepage and the Reliability overview link to it.
 - Structured data on the documentation's homepage: the site, Machyon as free MIT-licensed software with its version and where to install it, its source code on GitHub, and the author, linked to each other. `tests/test_site.py` checks that the version matches the package.
 
 **Changed**
 
+- The Colab notebook needs Machyon 1.2.1 and says so if an older version is loaded. Its settings have a **Referer** for sites that only serve images to their own pages, and a timeout. The report says what to change in the notebook's own terms (set REFERER, raise TIMEOUT, then retry) instead of naming command-line flags, and a new **Check a failing link** cell runs `machyon doctor` on the first failure. The notebook also says that Colab deletes its files when the session ends, and points to `machyon ui` for running on your own computer. Its tests cover a site that needs a Referer, with and without one.
+- Choosing an interface lists the Colab notebook, and the Cookbook's notebook card describes what it can do now.
 - Visitors who scrolled on in the first few seconds missed Opa's arrival on the homepage. While he is on his way, a faint outline of him now breathes in the logo where he will land. If the logo is scrolled off screen before he lands, the flight stops and plays again when the whole logo is back on screen, at most twice; once he has landed, scrolling changes nothing. The flight itself is unchanged.
 - The PyPI page shows the current README and package details. PyPI keeps the page a version was uploaded with, so 1.2.0's still listed "web scraping" and "crawler" as keywords and had the earlier summary and Contributing section.
 
