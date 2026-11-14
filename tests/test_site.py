@@ -135,6 +135,11 @@ def test_social_tags_match_the_page(site):
         assert p.one("twitter:title") == p.title, rel
         assert p.one("og:description") == p.one("description"), rel
         assert p.one("twitter:description") == p.one("description"), rel
+        if rel == "project/film/index.html":            # the film page's preview is the film's own poster
+            poster = site["url"] + "assets/film/machyon-in-104-seconds-poster.jpg"
+            assert p.one("og:image") == poster and p.one("twitter:image") == poster
+            assert (p.one("og:image:width"), p.one("og:image:height")) == ("1280", "720")
+            continue
         assert p.one("og:image") == card and p.one("twitter:image") == card, rel
         assert (p.one("og:image:width"), p.one("og:image:height")) == ("1200", "630"), rel
         if p.canonical:
@@ -180,8 +185,9 @@ def test_breadcrumbs(site):
     for rel, p in site["indexable"].items():
         if rel == "index.html":
             continue
-        assert len(p.jsonld) == 1, rel
-        ld = json.loads(p.jsonld[0])
+        crumbs = [b for b in p.jsonld if json.loads(b).get("@type") == "BreadcrumbList"]
+        assert len(crumbs) == 1, rel
+        ld = json.loads(crumbs[0])
         assert ld["@context"] == "https://schema.org" and ld["@type"] == "BreadcrumbList", rel
         items = ld["itemListElement"]
         assert len(items) >= 2, rel
@@ -210,7 +216,7 @@ def test_package_metadata():
 
 # ---------------------------------------------------------------------------------------- performance and accessibility
 
-WIDGET_SCRIPTS = ("engine-sim.js", "recording.js", "adaptive-lab.js", "opa-404.js")
+WIDGET_SCRIPTS = ("engine-sim.js", "recording.js", "adaptive-lab.js", "opa-404.js", "film.js")
 
 
 class Body(HTMLParser):
@@ -257,12 +263,12 @@ def bodies(site) -> dict:
 def test_widget_scripts_load_only_where_used(site, bodies):
     """No page links the Lab's, the simulator's or the 404 page's scripts; widgets.js fetches them where the markup is."""
     loader = (site["folder"] / "assets/js/widgets.js").read_text(encoding="utf-8")
-    for marker in ("data-mx-sim", "data-lab-replay", "data-lab-model", "data-opa-404"):
+    for marker in ("data-mx-sim", "data-lab-replay", "data-lab-model", "data-opa-404", "data-mx-film"):
         assert marker in loader
     for rel, b in bodies.items():
         assert not set(b.scripts) & set(WIDGET_SCRIPTS), (rel, b.scripts)
         assert "widgets.js" in b.scripts, rel
-    for name in ("engine-sim.js", "lab/recording.js", "lab/adaptive-lab.js", "opa-404.js"):
+    for name in ("engine-sim.js", "lab/recording.js", "lab/adaptive-lab.js", "opa-404.js", "film.js"):
         assert (site["folder"] / "assets/js" / name).is_file(), name
 
 
@@ -356,3 +362,55 @@ def test_homepage_structured_data(site):
     others = [rel for rel, p in site["pages"].items() if rel != "index.html"
               and any("@graph" in json.loads(b) for b in p.jsonld)]
     assert not others
+
+
+# ---------------------------------------------------------------------------------------------- the product film page
+
+def _film(site):
+    import re
+
+    import yaml  # comes with zensical, which builds the site these tests read
+    meta = (ROOT / "docs/project/film.md").read_text(encoding="utf-8").split("---")[1]
+    film = yaml.safe_load(meta)["film"]
+    html = (site["folder"] / "project/film/index.html").read_text(encoding="utf-8")
+    return film, html, re
+
+
+def test_film_chapters_match_the_captions(site):
+    """The transcript and chapters come from the front matter; the captions are the film's. They must agree."""
+    film, _html, re = _film(site)
+    vtt = (ROOT / "docs" / film["captions"]).read_text(encoding="utf-8")
+    cues = re.findall(r"(\d\d):(\d\d):(\d\d\.\d+) --> [\d:.]+\n(.+)", vtt)
+    spoken = [(int(h) * 3600 + int(m) * 60 + float(s), text.strip()) for h, m, s, text in cues]
+    assert [line for c in film["chapters"] for line in c["lines"]] == [text for _t, text in spoken]
+    starts = [c["t"] for c in film["chapters"]]
+    assert starts[0] == 0 and starts == sorted(starts) and starts[-1] < film["finale"] < film["duration"]
+    for c, nxt in zip(film["chapters"], starts[1:] + [film["finale"]], strict=True):    # each chapter's lines are spoken in it
+        times = [t for t, text in spoken if text in c["lines"]]
+        assert c["t"] <= min(times) and max(times) < nxt, c["title"]
+
+
+def test_film_page_player_and_structured_data(site):
+    film, html, re = _film(site)
+    video = re.search(r"<video[^>]*>", html).group(0)
+    assert "autoplay" not in video and 'preload="none"' in video and "poster=" in video
+    for key in ("src_1080", "src_720", "captions", "poster"):
+        assert (ROOT / "docs" / film[key]).is_file(), key
+    assert '<track kind="captions"' in html
+    assert html.count('class="mx-film-jump"') == 2 * len(film["chapters"])          # the list and the transcript
+    blocks = [json.loads(b) for b in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)]
+    video_ld = next(b for b in blocks if b.get("@type") == "VideoObject")
+    page_url = site["url"] + "project/film/"
+    assert video_ld["url"] == page_url and video_ld["contentUrl"] == site["url"] + film["src_1080"]
+    assert video_ld["thumbnailUrl"] == [site["url"] + film["poster"]]
+    clips = video_ld["hasPart"]
+    assert [c["name"] for c in clips] == [c["title"] for c in film["chapters"]]
+    for clip, nxt in zip(clips, clips[1:] + [None], strict=True):
+        assert clip["url"] == f"{page_url}?t={clip['startOffset']}"
+        assert clip["endOffset"] == (nxt["startOffset"] if nxt else round(film["duration"]))
+    assert 'property="og:image" content="' + site["url"] + film["poster"] in html
+
+
+def test_film_is_linked_from_the_homepage_and_reliability(site):
+    for rel in ("index.html", "reliability/index.html"):
+        assert "project/film/" in (site["folder"] / rel).read_text(encoding="utf-8"), rel

@@ -1,0 +1,57 @@
+{#- The product film page (docs/project/film.md). The film, its chapters and the transcript all come from the page's
+    `film:` front matter, so the chapter list, the transcript and the structured data (main.html) can't disagree.
+    The page's own Markdown (what you're seeing, where to next) sits between the chapters and the transcript.
+    film.js (loaded by widgets.js where [data-mx-film] is) makes the chapters seek and follow the film. -#}
+{% extends "main.html" %}
+
+{% macro timecode(t) -%}
+  {%- set s = t | round | int -%}{{ "%d:%02d" | format(s // 60, s % 60) }}
+{%- endmacro %}
+
+{% block content %}
+  {% set film = page.meta.film %}
+  {% include "partials/actions.html" %}
+  <h1>{{ page.title }}</h1>
+  <p class="mx-film-lead">{{ film.lead }}</p>
+
+  <div class="mx-film-stage" data-mx-film>
+    <div class="mx-film-player">
+      {#- No autoplay, and nothing is downloaded until play is pressed. 1080p on wide screens, 720p on narrow ones
+          (browsers that ignore `media` take the first source). -#}
+      <video class="mx-film" controls preload="none" playsinline poster="{{ film.poster | url }}"
+             aria-label="{{ film.label }}" data-duration="{{ film.duration }}">
+        <source src="{{ film.src_1080 | url }}" type="video/mp4" media="(min-width: 60em)">
+        <source src="{{ film.src_720 | url }}" type="video/mp4">
+        <track kind="captions" src="{{ film.captions | url }}" srclang="en" label="English">
+      </video>
+    </div>
+    <nav class="mx-film-chapters" aria-label="Chapters">
+      <ol>
+        {%- for c in film.chapters %}
+        <li data-t="{{ c.t }}">
+          <a class="mx-film-jump" href="?t={{ c.t | round | int }}" data-t="{{ c.t }}">
+            <span class="mx-film-time">{{ timecode(c.t) }}</span>
+            <span class="mx-film-title">{{ c.title }}</span>
+          </a>
+          <p>{{ c.text }}</p>
+          <a class="mx-film-more" href="{{ c.link | url }}">{{ c.link_text }} →</a>
+        </li>
+        {%- endfor %}
+      </ol>
+    </nav>
+  </div>
+
+  {#- The transcript goes where the page's Markdown has <div data-mx-transcript></div>, before "Where to next". -#}
+  {% set transcript %}
+  <h2 id="transcript">Transcript<a class="headerlink" href="#transcript" title="Link to this section">&para;</a></h2>
+  <div class="mx-film-transcript">
+    {%- for c in film.chapters %}
+    <p><a class="mx-film-jump" href="?t={{ c.t | round | int }}" data-t="{{ c.t }}">{{ timecode(c.t) }}</a>
+      <strong>{{ c.title }}.</strong> {{ c.lines | join(" ") }}</p>
+    {%- endfor %}
+    <p class="mx-film-note">{{ timecode(film.finale) }} to the end: Opa's arrival, with music and no narration. He flies in and
+      completes the wordmark, and the tagline appears: Every image. Mach speed. Zero lost.</p>
+  </div>
+  {% endset %}
+  {{ page.content | replace("<div data-mx-transcript></div>", transcript) }}
+{% endblock %}

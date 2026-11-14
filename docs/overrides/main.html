@@ -32,6 +32,7 @@
   {%- set mx_head = mx_title() | e %}
   {%- set mx_desc = mx_meta.description | d(config.site_description, true) | e %}
   {%- set mx_card = config.site_url ~ "assets/brand/social-card.png" %}
+  {%- set mx_film = mx_meta.film %}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{ config.site_name }}">
   <meta property="og:title" content="{{ mx_head }}">
@@ -39,10 +40,19 @@
   {%- if page.canonical_url %}
   <meta property="og:url" content="{{ page.canonical_url }}">
   {%- endif %}
+  {%- if mx_film %}
+  {#- The film page's link preview shows the film's own poster. -#}
+  {%- set mx_card = config.site_url ~ mx_film.poster %}
+  <meta property="og:image" content="{{ mx_card }}">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="720">
+  <meta property="og:image:alt" content="{{ mx_film.label }}">
+  {%- else %}
   <meta property="og:image" content="{{ mx_card }}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Machyon: every image, Mach speed, zero lost. Fast async image downloads for Python.">
+  {%- endif %}
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ mx_head }}">
   <meta name="twitter:description" content="{{ mx_desc }}">
@@ -65,6 +75,27 @@
       {%- set ns.items = ns.items + [{"@type": "ListItem", "position": loop.index, "name": c.name, "item": c.url}] %}
     {%- endfor %}
   <script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": ns.items} | tojson }}</script>
+  {%- endif %}
+  {#- The film page: a VideoObject with its chapters as Clips, so search results can link to a moment in the film.
+      Each Clip's url carries ?t=<seconds>, which film.js reads to cue the film there. -#}
+  {%- if mx_film and page.canonical_url %}
+    {%- set ns_f = namespace(clips=[], words=[]) %}
+    {%- for c in mx_film.chapters %}
+      {%- set end = mx_film.chapters[loop.index].t if not loop.last else mx_film.duration %}
+      {%- set ns_f.clips = ns_f.clips + [{"@type": "Clip", "name": c.title, "startOffset": c.t | round | int,
+                                          "endOffset": end | round | int,
+                                          "url": page.canonical_url ~ "?t=" ~ (c.t | round | int | string)}] %}
+      {%- set ns_f.words = ns_f.words + c.lines %}
+    {%- endfor %}
+    {%- set mx_secs = mx_film.duration | round | int %}
+  <script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "VideoObject",
+    "name": mx_film.name, "description": mx_meta.description, "thumbnailUrl": [config.site_url ~ mx_film.poster],
+    "uploadDate": mx_film.uploaded, "duration": "PT%dM%dS" | format(mx_secs // 60, mx_secs % 60),
+    "contentUrl": config.site_url ~ mx_film.src_1080, "url": page.canonical_url, "inLanguage": "en",
+    "isFamilyFriendly": true, "transcript": ns_f.words | join(" "),
+    "author": {"@type": "Person", "name": config.site_author, "url": "https://github.com/DivyanshuSingh96"},
+    "about": {"@type": "SoftwareApplication", "name": config.site_name, "url": config.site_url},
+    "hasPart": ns_f.clips} | tojson }}</script>
   {%- endif %}
   {#- The homepage says what Machyon is in a form search engines read directly: the site, the software (free, MIT,
       its version, where to get it) and its source code, linked to each other and to the author. No ratings or

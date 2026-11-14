@@ -17,6 +17,7 @@
     ["[data-lab-model], [data-lab-predict], [data-lab-replay], [data-lab-compare], [data-lab-provenance]",
       ["lab/recording.js", "lab/adaptive-lab.js"]],
     ["[data-opa-404]", ["opa-404.js"]],
+    ["[data-mx-film]", ["film.js"]],
   ];
   const here = document.currentScript ? document.currentScript.src : location.href;
   const requested = new Set();

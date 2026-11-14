@@ -1,5 +1,5 @@
 ---
-description: Machyon has four ways in. Pick download() for scripts, Downloader or adownload() inside async code, the CLI for the terminal, and machyon ui for your browser.
+description: Pick download() for scripts, adownload() or Downloader in async code, the CLI in a terminal, machyon ui in your browser, or Colab with no install.
 ---
 
 # Choosing an interface
@@ -14,6 +14,7 @@ later without re-downloading anything.
 | An app that downloads more than once, or needs retries and failures as data | [`machyon.Downloader`][machyon.Downloader] | [`Report`][machyon.Report] per call |
 | Nothing: you're in a terminal | [`machyon`](../reference/cli.md) | exit status 0, or 1 with `--strict` when anything failed |
 | Nothing at all: you'd rather click | [`machyon ui`](machyon-ui.md), a local app in your browser | a run folder with the images, `report.json` and a gallery |
+| Nothing, and nothing installed | The [Colab notebook](https://colab.research.google.com/github/DivyanshuSingh96/machyon/blob/main/notebooks/machyon-colab.ipynb): a form in Google Colab | the images as a ZIP or in your Google Drive, with the failures and their reasons |
 
 ## `download()`: one call
 

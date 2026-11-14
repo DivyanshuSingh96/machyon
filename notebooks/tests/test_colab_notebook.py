@@ -10,6 +10,7 @@ import socket
 import subprocess
 import sys
 import time
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -37,21 +38,35 @@ sys.modules.update({{"google": _g, "google.colab": _c, "google.colab.files": _fi
 '''
 
 
-@pytest.fixture(scope="module")
-def cdn():
+def start_cdn(*extra):
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
     proc = subprocess.Popen([sys.executable, str(ROOT / "tests" / "fakecdn.py"), "--port", str(port), "--rtt", "0.01",
-                             "--handshake", "0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             "--handshake", "0", *extra], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(200):
         try:
             socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
             break
         except OSError:
             time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}"
+    return proc, f"http://127.0.0.1:{port}"
+
+
+@pytest.fixture(scope="module")
+def cdn():
+    proc, url = start_cdn()
+    yield url
+    proc.terminate()
+    proc.wait(10)
+
+
+@pytest.fixture(scope="module")
+def guarded_cdn():
+    """A site that only serves its images to its own pages (hotlink protection)."""
+    proc, url = start_cdn("--require-referer", "https://gallery.example/")
+    yield url
     proc.terminate()
     proc.wait(10)
 
@@ -86,7 +101,10 @@ def output_of(nb, out, title):
 def test_the_notebook_is_valid_and_pins_a_published_release():
     nb, tagged = load()
     nbformat.validate(nbformat.read(NOTEBOOK, as_version=4))
-    assert re.search(r'machyon>=1\.0\.\d+"', nbformat.read(NOTEBOOK, as_version=4).cells[1].source)
+    pin = re.search(r'machyon>=(\d+)\.(\d+)\.(\d+)"', nbformat.read(NOTEBOOK, as_version=4).cells[1].source)
+    assert pin and tuple(map(int, pin.groups())) >= (1, 2, 1)            # Referer and the current failure hints
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    assert tuple(map(int, pin.groups())) <= tuple(map(int, project.split(".")[:3]))   # never ahead of the package
     assert all(not c.get("outputs") for c in nb.cells if c.cell_type == "code")     # shipped without outputs
     assert "asyncio.run" not in "".join(c.source for c in nb.cells)                 # Colab already runs a loop
 
@@ -148,3 +166,25 @@ def test_a_bad_template_stops_before_downloading(cdn, tmp_path):
     with pytest.raises(nbclient.exceptions.CellExecutionError, match="can't read this source"):
         run(nb, tmp_path)
     assert not (tmp_path / "images").exists()
+
+
+def test_a_site_that_needs_a_referer(guarded_cdn, tmp_path):
+    """Without REFERER the report says what to change; with it, every image downloads."""
+    links = 'URLS = """\n' + "\n".join(f"{guarded_cdn}/img/{i}.jpg" for i in range(4)) + '\n"""'
+    nb, tagged = load()
+    tagged["urls"].source = links
+    (tmp_path / "without").mkdir()
+    out = run(nb, tmp_path / "without")
+    assert "4 failed" in output_of(nb, out, "Download")
+    report = output_of(nb, out, "Report")
+    assert "http_403" in report and "set REFERER in ⚙ Settings" in report and "--referer" not in report
+    check = output_of(nb, out, "⚙ Check a failing link")
+    assert "HTTP 403" in check and "Set REFERER in ⚙ Settings" in check and "--referer" not in check
+
+    nb, tagged = load()
+    tagged["urls"].source = links
+    set_params(tagged["settings"], REFERER="https://gallery.example/photos")
+    (tmp_path / "with").mkdir()
+    out = run(nb, tmp_path / "with")
+    assert "4 downloaded" in output_of(nb, out, "Download")
+    assert "No failures to check" in output_of(nb, out, "⚙ Check a failing link")

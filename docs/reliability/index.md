@@ -7,6 +7,9 @@ description: How Machyon keeps track of every row, from planning to the file on 
 <p class="lead">Fast is easy. Fast and complete is the hard part. Machyon is built so that when a run ends, you
 know the state of every single row.</p>
 
+Prefer to watch first? [Machyon in 104 seconds](../project/film.md) follows one real run of 3,000 links through
+these checks, with a chapter for each.
+
 Opa, the mascot, has five eyes. Machyon checks every row at five points too:
 
 <div class="mx-five" markdown>
