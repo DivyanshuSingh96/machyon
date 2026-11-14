@@ -8,7 +8,7 @@
   hosts, and the pause is checked again after a slot is acquired, so a worker that was already
   queued for a slot when the 429 arrived cannot slip through.
 * Hedging: once the queue drains, a request far slower than its peers gets a duplicate; the
-  first good answer wins and the other is cancelled.
+  first good answer wins and the rest are cancelled. A duplicate that stalls too gets another.
 * Teardown records every unfinished job (Ctrl+C, disk full) so nothing is silently dropped.
 """
 from __future__ import annotations
@@ -29,6 +29,9 @@ from .metrics import MetricsEngine
 from .session import NetworkSessionManager
 
 logger = logging.getLogger("machyon.engine")
+
+MAX_RACING = 3     # attempts of one job in flight at once: the original and up to two duplicates
+MAX_HEDGES = 3     # duplicates per job over the whole run
 
 
 class Engine:
@@ -135,10 +138,13 @@ class Engine:
                 fut.set_result(res)
                 for t in others:
                     t.cancel()
+                if res[0] == "ok" and task is not job.tasks[0]:
+                    # a duplicate that wins replaces a stuck or failed request instead of adding one:
+                    # it doesn't count against the budget, which only caps duplicates that were wasted
+                    state["hedge_budget"] += 1
             elif task is not job.tasks[0]:
-                # the hedge failed transiently while the original is still stuck:
-                # allow another hedge later instead of waiting out the stuck request
-                job.tasks = (job.tasks[0],)
+                # a duplicate failed transiently while another attempt is still stuck:
+                # allow another duplicate later instead of waiting out the stuck request
                 job.started = loop.time()
 
         async def attempt(job: Job, t0: float):
@@ -182,13 +188,19 @@ class Engine:
                 for job in list(inflight):
                     if state["hedge_budget"] <= 0:
                         break
-                    if job.fut is None or job.fut.done() or len(job.tasks) != 1 or now - job.started < thresh:
+                    if job.fut is None or job.fut.done() or now - job.started < thresh:
+                        continue
+                    # A duplicate can stall too (it is just another request): once the newest attempt has
+                    # also taken longer than the threshold, start another, up to MAX_RACING at once and
+                    # MAX_HEDGES per job.
+                    if len(job.tasks) > MAX_HEDGES or sum(not t.done() for t in job.tasks) >= MAX_RACING:
                         continue
                     if self.host_pause.get(job.host, 0.0) > now:
                         continue  # a hedge is a new request too: none while the host has asked us to wait
-                    clone = job.clone()
+                    clone = job.clone(len(job.tasks))
                     t = loop.create_task(fetcher.attempt(session, clone))
-                    job.tasks = (job.tasks[0], t)
+                    job.tasks = (*job.tasks, t)
+                    job.started = now               # the next duplicate waits a full threshold after this one
                     t.add_done_callback(lambda tt, j=job, cl=clone: hedge_done(j, cl, tt))
                     state["hedge_budget"] -= 1
                     m.c["hedged"] += 1

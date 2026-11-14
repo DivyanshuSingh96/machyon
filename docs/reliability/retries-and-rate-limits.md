@@ -65,11 +65,13 @@ downloader at its default settings lost 2,995 of them to 429s.
 ## Hedging: no straggler tax
 
 At the end of a run the queue is empty and a few slow responses can hold everything up. Once the queue has
-drained, any request that has taken longer than `max(0.75 s, 2 × the p90 latency)` gets one duplicate request.
-The first good answer wins and the other is cancelled.
+drained, any request that has taken longer than `max(0.75 s, 2 × the p90 latency)` gets a duplicate request.
+The first good answer wins and the others are cancelled. A duplicate can stall too; if it hasn't answered within
+the same threshold, the request gets another, up to three duplicates.
 
 - Hedging only happens at the tail, never while there is still queued work.
-- It's budgeted: at most `max(16, 5% of the jobs)` duplicates per shard.
+- It's budgeted: at most `max(16, 5% of the jobs)` duplicates per shard that don't win. A duplicate that wins
+  replaced a stuck request rather than adding one, so it doesn't count.
 - Racing requests write through separate temporary files, so they can't corrupt each other.
 - Turn it off with `hedge=False` (`--no-hedge`) if every extra request counts against a quota.
 

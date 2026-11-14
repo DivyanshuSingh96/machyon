@@ -80,11 +80,11 @@ The limiter works in measurement windows: at least 1 s long, and with about one 
 - The final limit is saved per host and used as the next run's starting point.
 
 ### Hedging
-This runs only when the ready-queue is empty (the tail). For an in-flight job older than `max(0.75 s, 2 × p90 latency)`, start one duplicate attempt.
+This runs only when the ready-queue is empty (the tail). For an in-flight job older than `max(0.75 s, 2 × p90 latency)`, start a duplicate attempt.
 
-- The first **ok** wins and the other is cancelled.
-- If the duplicate fails transiently while the original is still stuck, the job becomes hedgeable again.
-- The hedge budget is `max(16, 5% of jobs)` per shard.
+- The first **ok** wins and the others are cancelled.
+- If a duplicate fails transiently, or stalls too (no answer within the threshold of its own start), the job gets another duplicate: at most 3 attempts in flight and 3 duplicates per job.
+- The hedge budget is `max(16, 5% of jobs)` per shard. A duplicate that wins is given back, because it replaced a stuck or failed request instead of adding one; the budget limits the duplicates that turned out unnecessary.
 - Duplicates write through unique temp files, so racing writers can't corrupt each other.
 
 ### Streaming and resume
