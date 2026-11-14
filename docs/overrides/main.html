@@ -66,4 +66,28 @@
     {%- endfor %}
   <script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": ns.items} | tojson }}</script>
   {%- endif %}
+  {#- The homepage says what Machyon is in a form search engines read directly: the site, the software (free, MIT,
+      its version, where to get it) and its source code, linked to each other and to the author. No ratings or
+      reviews: there are none to report. -#}
+  {%- if page.canonical_url and page.canonical_url == config.site_url %}
+    {%- set mx_author = {"@type": "Person", "@id": config.site_url ~ "#author", "name": config.site_author,
+                         "url": "https://github.com/DivyanshuSingh96"} %}
+    {%- set mx_graph = [
+      {"@type": "WebSite", "@id": config.site_url ~ "#website", "url": config.site_url, "name": config.site_name,
+       "description": config.site_description, "inLanguage": "en", "publisher": {"@id": config.site_url ~ "#author"}},
+      {"@type": "SoftwareApplication", "@id": config.site_url ~ "#software", "name": config.site_name,
+       "description": mx_meta.description | d(config.site_description, true), "url": config.site_url,
+       "applicationCategory": "DeveloperApplication", "applicationSubCategory": "Image downloader",
+       "operatingSystem": "Windows, macOS, Linux", "softwareVersion": config.extra.version,
+       "downloadUrl": config.extra.pypi, "installUrl": config.extra.pypi, "image": mx_card,
+       "license": "https://opensource.org/licenses/MIT", "isAccessibleForFree": true,
+       "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+       "author": {"@id": config.site_url ~ "#author"}, "sameAs": [config.extra.repo, config.extra.pypi]},
+      {"@type": "SoftwareSourceCode", "@id": config.site_url ~ "#source", "name": config.site_name,
+       "codeRepository": config.extra.repo, "programmingLanguage": "Python", "runtimePlatform": "Python 3.11+",
+       "license": "https://opensource.org/licenses/MIT", "author": {"@id": config.site_url ~ "#author"},
+       "targetProduct": {"@id": config.site_url ~ "#software"}},
+      mx_author] %}
+  <script type="application/ld+json">{{ {"@context": "https://schema.org", "@graph": mx_graph} | tojson }}</script>
+  {%- endif %}
 {% endblock %}

@@ -71,6 +71,7 @@ This document describes Machyon independently of Python. It is the contract a po
 
 ### Adaptive limiter
 The limiter works in measurement windows: at least 1 s long, and with about one full turn of the pool, `min(limit, 64)` attempts.
+
 - **Slow start:** double the limit while throughput improves by more than 8%.
 - **No gain:** if a step up didn't improve throughput by more than 8%, revert to the previous limit (fewer sockets for the same speed). Once it settles, probe +12.5% every 4 windows.
 - **Throttle:** if 429s are at least 1% of attempts, set `ceiling = 0.9·limit` and `limit = 0.7·limit`. The ceiling relaxes by 10% every 15 calm windows.
@@ -79,14 +80,16 @@ The limiter works in measurement windows: at least 1 s long, and with about one 
 - The final limit is saved per host and used as the next run's starting point.
 
 ### Hedging
-This runs only when the ready-queue is empty (the tail). For an in-flight job older than `max(0.75 s, 2 × p90 latency)`, start one duplicate attempt.
-- The first **ok** wins and the other is cancelled.
-- If the duplicate fails transiently while the original is still stuck, the job becomes hedgeable again.
-- The hedge budget is `max(16, 5% of jobs)` per shard.
+This runs only when the ready-queue is empty (the tail). For an in-flight job older than `max(0.75 s, 2 × p90 latency)`, start a duplicate attempt.
+
+- The first **ok** wins and the others are cancelled.
+- If a duplicate fails transiently, or stalls too (no answer within the threshold of its own start), the job gets another duplicate: at most 3 attempts in flight and 3 duplicates per job.
+- The hedge budget is `max(16, 5% of jobs)` per shard. A duplicate that wins is given back, because it replaced a stuck or failed request instead of adding one; the budget limits the duplicates that turned out unnecessary.
 - Duplicates write through unique temp files, so racing writers can't corrupt each other.
 
 ### Streaming and resume
 A body is streamed when it is larger than `stream_threshold` (4 MB) or its length is unknown.
+
 - It streams to `.<name>.machpart`. The first 64 bytes are validated before anything is written.
 - On a mid-body reset, keep the part and resume with `Range: bytes=<size>-` and `If-Range: <strong ETag | Last-Modified>`.
 - A resume is rejected, and the download starts from zero, if the part on disk doesn't match the expected size.

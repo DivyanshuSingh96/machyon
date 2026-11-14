@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "machyon"
-version = "1.2.0"
+version = "1.2.1"
 description = "Fast async image downloader for Python: self-tuning, rate-limit aware, every file accounted for."
 readme = "README.md"
 requires-python = ">=3.11"

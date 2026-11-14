@@ -4,7 +4,9 @@
     python tools/check_docs.py --release    # ...and no placeholders left anywhere
 
 Zensical's strict build catches missing pages; this catches what it doesn't: broken #anchors, API references
-mkdocstrings couldn't resolve, leftover template syntax, and pages that would load resources from other sites.
+mkdocstrings couldn't resolve, leftover template syntax, pages that would load resources from other sites, and
+lists that ran into the paragraph above them (GitHub renders a list straight after a line of text; this site's
+Markdown needs a blank line before it, or every item ends up in one paragraph).
 Exit status 1 on any problem.
 """
 from __future__ import annotations
@@ -20,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
 PLACEHOLDER = "YOUR_GITHUB_USERNAME"
 RELEASE_FILES = ["zensical.toml", "pyproject.toml", "README.md", "CITATION.cff", "CONTRIBUTING.md", "docs"]
+#: A paragraph that still contains a line starting like a list item: the list above it lost its blank line.
+RUN_ON_LIST = re.compile(r"\n[ \t]*(?:[-*+]|\d{1,3}[.)])[ \t]+\S")
 #: Requests the site may make to other origins at runtime (the theme's repository widget).
 ALLOWED_REMOTE = ("https://api.github.com/",)
 
@@ -33,6 +37,8 @@ class Page(HTMLParser):
         self.remote: list[str] = []
         self._skip = 0           # inside <code>/<pre>/<script>: template syntax there is content
         self.text_hits: list[str] = []
+        self.run_on_lists: list[str] = []
+        self._para: list[str] | None = None     # text of the <p> being read
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -53,14 +59,23 @@ class Page(HTMLParser):
                 self.media.append(v)
         if src and urlsplit(src).scheme in ("http", "https") and not src.startswith(ALLOWED_REMOTE):
             self.remote.append(f"<{tag}> {src}")
+        if tag == "p":
+            self._para = []
         if tag in ("code", "pre", "script", "style"):
             self._skip += 1
 
     def handle_endtag(self, tag):
         if tag in ("code", "pre", "script", "style") and self._skip:
             self._skip -= 1
+        if tag == "p" and self._para is not None:
+            text = "".join(self._para)
+            if RUN_ON_LIST.search(text):
+                self.run_on_lists.append(" ".join(text.split())[:70])
+            self._para = None
 
     def handle_data(self, data):
+        if self._para is not None:
+            self._para.append(data if not self._skip else "x")
         if self._skip:
             return
         for pattern in (r"\{\{.*?\}\}", r"\{%.*?%\}", r"\]\[machyon\.[\w.]+\]"):
@@ -78,6 +93,8 @@ def check_site(site: Path) -> list[str]:
         rel = f.relative_to(site.resolve())
         for hit in p.text_hits:
             problems.append(f"{rel}: unrendered template or unresolved reference: {hit}")
+        for text in p.run_on_lists:
+            problems.append(f"{rel}: a list ran into the paragraph above it (add a blank line before it): {text}...")
         for r in p.remote:
             problems.append(f"{rel}: loads a third-party resource {r}")
         if rel.name == "404.html":      # served from any depth: its links are absolute by design

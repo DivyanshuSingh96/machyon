@@ -102,8 +102,12 @@ def test_transient_503_and_truncation_recover(cdn, dl_kwargs):
     assert m["retries"] > 0 and m["failed_downloads"] == 0
 
 
-def test_stalled_responses_are_hedged(cdn, dl_kwargs):
-    c = cdn("--p-stall", "0.05")
+# Seed 7 stalls 16 of the first 300 requests; seed 1 stalls 23 (more than the duplicate budget of 16, so duplicates
+# that win must be given back); with seed 13 two of the duplicates stall as well and need a duplicate of their own.
+# The order requests reach the server varies by platform, so each seed also exercises neighbouring cases.
+@pytest.mark.parametrize("seed", ["7", "1", "13"])
+def test_stalled_responses_are_hedged(cdn, dl_kwargs, seed):
+    c = cdn("--p-stall", "0.05", "--seed", seed)
     rows = [(c.url(i), f"{i}.png") for i in range(300)]
     t0 = time.time()
     d, m = go(fetch(rows, **{**dl_kwargs, "timeout": 30}))

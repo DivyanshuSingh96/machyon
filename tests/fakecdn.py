@@ -530,5 +530,6 @@ if __name__ == "__main__":
         import ssl as _ssl
         ssl_ctx = _ssl.create_default_context(_ssl.Purpose.CLIENT_AUTH)
         ssl_ctx.load_cert_chain(args.tls_cert, args.tls_key)
-    web.run_app(make_app(args), host="127.0.0.1", port=args.port, print=None,
+    # shutdown_timeout: on SIGTERM, don't wait the default 60 s for handlers deliberately stalled by --p-stall
+    web.run_app(make_app(args), host="127.0.0.1", port=args.port, print=None, shutdown_timeout=1,
                 access_log=None, backlog=4096, keepalive_timeout=300, ssl_context=ssl_ctx)

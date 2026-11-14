@@ -36,8 +36,9 @@ class Job:
         self.rel.append(rel)
         self.rows += 1
 
-    def clone(self) -> Job:
-        j = Job(self.url, self.paths[0], self.rel[0], self.host, tag=".h")
+    def clone(self, n: int = 1) -> Job:
+        """A duplicate for hedging; ``n`` keeps each duplicate's part file apart from the others'."""
+        j = Job(self.url, self.paths[0], self.rel[0], self.host, tag=f".h{n}")
         j.paths, j.rel, j.rows = list(self.paths), list(self.rel), self.rows
         return j
 
