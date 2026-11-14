@@ -176,7 +176,7 @@ def test_sitemap_lists_every_indexable_page(site):
 
 def test_breadcrumbs(site):
     locs = {p.canonical for p in site["indexable"].values()}
-    assert not site["pages"]["index.html"].jsonld
+    assert all("BreadcrumbList" not in b for b in site["pages"]["index.html"].jsonld)   # no crumbs on the homepage
     for rel, p in site["indexable"].items():
         if rel == "index.html":
             continue
@@ -315,3 +315,44 @@ def test_muted_text_meets_wcag_aa():
             assert contrast(f, b) >= 4.5, (fg, f, bg, b, round(contrast(f, b), 2))
     assert re.search(r"\.md-footer__direction\s*\{[^}]*opacity:\s*1", css)          # not the theme's 0.7
     assert re.search(r"\.mx-lab-inst-num small\s*\{[^}]*opacity:\s*1", css)         # not the theme's faded <small>
+
+
+def test_lists_did_not_run_into_the_paragraph_above(site):
+    """GitHub renders a list straight after a line of text; this site needs a blank line, or the items merge."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("check_docs", ROOT / "tools" / "check_docs.py")
+    check_docs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check_docs)
+    merged = {}
+    for rel in site["pages"]:
+        page = check_docs.Page()
+        page.feed((site["folder"] / rel).read_text(encoding="utf-8"))
+        if page.run_on_lists:
+            merged[rel] = page.run_on_lists
+    assert not merged
+
+
+def test_search_highlights_are_amber_and_cleared(site):
+    """Search marks must not share the accent used by links, inline code and the current nav item."""
+    config = tomllib.loads((ROOT / "zensical.toml").read_text(encoding="utf-8"))["project"]
+    assert "assets/js/search-highlight.js" in config["extra_javascript"]
+    assert (site["folder"] / "assets/js/search-highlight.js").is_file()
+    css = (ROOT / "docs/assets/css/machyon.css").read_text(encoding="utf-8")
+    mark = next(line for line in css.splitlines() if "--md-typeset-mark-color:" in line)
+    assert "--mx-amber" in mark and "--mx-accent" not in mark
+
+
+def test_homepage_structured_data(site):
+    """The homepage describes the site, the software and its source code; the version is the package's."""
+    head = site["pages"]["index.html"]
+    graphs = [g for block in head.jsonld for g in json.loads(block).get("@graph", [])]
+    by_type = {g["@type"]: g for g in graphs}
+    assert {"WebSite", "SoftwareApplication", "SoftwareSourceCode", "Person"} <= set(by_type)
+    app = by_type["SoftwareApplication"]
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    assert app["softwareVersion"] == version
+    assert app["offers"]["price"] == "0" and "aggregateRating" not in app and "review" not in app
+    assert by_type["SoftwareSourceCode"]["codeRepository"] == "https://github.com/DivyanshuSingh96/machyon"
+    others = [rel for rel, p in site["pages"].items() if rel != "index.html"
+              and any("@graph" in json.loads(b) for b in p.jsonld)]
+    assert not others

@@ -8,7 +8,7 @@ approved half speed (about 14.5 s, starting 1.3 s after the page appears).
 
 | File | Role |
 | --- | --- |
-| `docs/assets/js/opa-arrival-loader.js` | On every page (about 3 KB, hand-written). Plays only on the homepage, once per visit (again after a reload), never with reduced motion, data saver or without WebGL2. Fetches the files below only when it will play. |
+| `docs/assets/js/opa-arrival-loader.js` | On every page (about 3 KB, hand-written). Plays only on the homepage, once per visit (again after a reload), never with reduced motion, data saver or without WebGL2. Fetches the files below only when it will play. While Opa is on his way, shows a faint outline of him where he will land. If the logo is scrolled off screen before he lands, stops the flight and plays it again when the whole logo is back on screen (at most twice). |
 | `docs/assets/js/opa-arrival.js` | Built from `src/arrival.ts` by `npm run build`: the page's side (about 5 KB, no three.js). Places the canvas, measures the logo, runs the fades and the cross-fade, Skip and every other way out, and starts the renderer. |
 | `docs/assets/js/opa-arrival-render.js` | Built from `src/render.ts`: the renderer (three.js r187 with its glTF loader and the meshopt decoder, bundled; no CDN). It runs in a worker, drawing on the canvas handed over with `transferControlToOffscreen`, so drawing never occupies the page's main thread; where a browser can't do that, the same script runs in the page. |
 | `docs/assets/opa/opa.glb` | Built from `src/model.ts`: the rigged model (mesh, 59-bone skeleton, skin weights, outline normals), meshopt-compressed. Opens in Blender (File > Import > glTF 2.0). |

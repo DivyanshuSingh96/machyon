@@ -104,7 +104,7 @@
   --md-accent-bg-color: var(--mx-surface);
   --md-typeset-color: var(--md-default-fg-color);
   --md-typeset-a-color: var(--mx-ink);
-  --md-typeset-mark-color: color-mix(in srgb, var(--mx-accent) 35%, transparent);
+  --md-typeset-mark-color: color-mix(in srgb, var(--mx-amber) 42%, transparent);   /* search highlights */
   --md-typeset-table-color: var(--mx-line);
   --md-typeset-table-color--light: var(--mx-band2);
   --md-code-bg-color: var(--mx-code-bg);
@@ -735,9 +735,29 @@ body {
 /* Opa's arrival on the homepage (assets/js/opa-arrival-loader.js, built from assets/source/opa-arrival).
    While Opa flies in, the logo's own symbol waits; the canvas takes no clicks and scrolls with the page. */
 html.mx-arriving .mx-hero-mark .mx-opa { visibility: hidden; }
+/* While Opa is on his way, a faint outline of him breathes where he will land (opa-arrival-loader.js adds it), so the
+   empty spot reads as "he's coming" and visitors wait for him without being told to. */
+.mx-hero-mark .mx-opa-ghost { display: none; }
+html.mx-arriving .mx-hero-mark .mx-opa-ghost { display: inline; opacity: .14; animation: mx-ghost 1.5s ease-in-out infinite alternate; }
+html.mx-arriving .mx-hero-mark .mx-opa-ghost * { animation: none; }
+@keyframes mx-ghost { to { opacity: .34; } }
 .mx-arrival { position: absolute; z-index: 3; pointer-events: none; }
 .mx-arrival-skip { position: fixed; right: 1rem; bottom: 1rem; z-index: 5; padding: .55rem .9rem; border-radius: 999px;
   font: 600 .7rem/1 var(--mx-head-font); color: var(--mx-ink); background: var(--mx-glass); border: 1px solid var(--mx-line);
   box-shadow: 0 .2rem .8rem rgba(var(--mx-shadow-rgb), .14); backdrop-filter: blur(6px); cursor: pointer; }
 .mx-arrival-skip:hover { background: var(--mx-chip); color: var(--mx-chip-ink); }
 .mx-arrival-skip:focus-visible { outline: 2px solid var(--mx-focus); outline-offset: 2px; }
+
+/* Search highlights (search-highlight.js clears them after a few seconds or on the first click, key or scroll).
+   Amber, so a highlighted word can't be mistaken for a link, inline code or the current nav item, all of which
+   use the accent. */
+.md-typeset mark[data-md-highlight] {
+  color: inherit; border-radius: 3px; padding: 0 .08em;
+  box-shadow: inset 0 -.12em 0 color-mix(in srgb, var(--mx-amber) 85%, transparent);
+  transition: background-color .6s var(--mx-ease), box-shadow .6s var(--mx-ease);
+}
+[data-md-color-scheme="slate"] .md-typeset mark[data-md-highlight] {
+  background-color: color-mix(in srgb, var(--mx-amber) 30%, transparent);
+}
+.md-typeset mark[data-md-highlight].mx-hl-out { background-color: transparent; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .md-typeset mark[data-md-highlight] { transition: none; } }

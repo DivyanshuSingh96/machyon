@@ -20,7 +20,7 @@ _snippets/
 
 extra_css = ["assets/css/machyon.css"]
 # widgets.js loads engine-sim.js, the Lab's scripts and opa-404.js only on the pages whose markup uses them.
-extra_javascript = ["assets/js/toc-pin.js", "assets/js/tables.js", "assets/js/widgets.js", "assets/js/opa-arrival-loader.js"]
+extra_javascript = ["assets/js/toc-pin.js", "assets/js/tables.js", "assets/js/widgets.js", "assets/js/search-highlight.js", "assets/js/opa-arrival-loader.js"]
 
 nav = [
   { "Home" = "index.md" },
@@ -127,6 +127,7 @@ toggle.name = "Switch to system preference"
 [project.extra]
 repo = "https://github.com/DivyanshuSingh96/machyon"           # used inside pages
 pypi = "https://pypi.org/project/machyon/"
+version = "1.2.1"                                           # the homepage's structured data; must match pyproject.toml
 film = "assets/film/the-arrival-of-opa.mp4"
 
 [[project.extra.social]]
