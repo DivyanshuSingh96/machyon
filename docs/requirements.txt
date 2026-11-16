@@ -1,6 +1,6 @@
 # Documentation toolchain, pinned so the site builds the same everywhere. Install with:
 #   pip install -e ".[dev]" -r docs/requirements.txt
-zensical==0.1.0
+zensical==0.1.1
 mkdocstrings==1.0.8
-mkdocstrings-python==2.0.10
+mkdocstrings-python==2.0.11
 griffelib==2.4.1
