@@ -53,13 +53,22 @@ class FailureLedger:
             return f"{name}\x00{url}\x00{row}"
         return name
 
-    def mark_failed(self, name: str, url: str, reason: str, row=None, error: str | None = None) -> bool:
-        """Record a failure; returns True if it's newly counted."""
+    def mark_failed(self, name: str, url: str, reason: str, row=None, error: str | None = None,
+                    attempts: int | None = None) -> bool:
+        """Record a failure; returns True if it's newly counted.
+
+        attempts: requests sent for the row by the call recording it. They are added to what earlier calls recorded
+        for the same row and URL, so ``attempts`` in failed_downloads.jsonl is the row's total so far."""
         k = self.key(name, url, reason, row)
+        prev = self.failed.get(k)
         self.cleared.discard(k)
         self.failed[k] = {"url": url, "reason": reason, "name": name}
         if error:
             self.failed[k]["error"] = error
+        if attempts is not None:
+            total = attempts + (prev.get("attempts", 0) if prev is not None and prev["url"] == url else 0)
+            if total:
+                self.failed[k]["attempts"] = total
         self.call_failed.add(k)
         if k not in self.counted:
             self.counted.add(k)
@@ -138,6 +147,8 @@ class FailureLedger:
                 out[k] = {"url": e["url"], "reason": reason, "name": n}
                 if e.get("error"):
                     out[k]["error"] = e["error"]
+                if isinstance(e.get("attempts"), int) and e["attempts"] > 0:
+                    out[k]["attempts"] = e["attempts"]
         return out
 
     def write(self) -> None:
@@ -181,12 +192,18 @@ class FailureLedger:
                 return
             grouped: dict[tuple[str, str], list[str]] = {}
             errors: dict[tuple[str, str], str] = {}
+            attempts: dict[tuple[str, str], int] = {}   # one URL's rows share its requests
             for v in merged.values():
-                grouped.setdefault((v["url"], v["reason"]), []).append(v["name"])
+                g = (v["url"], v["reason"])
+                grouped.setdefault(g, []).append(v["name"])
                 if v.get("error"):
-                    errors.setdefault((v["url"], v["reason"]), v["error"])
-            lines = "".join(json.dumps({"url": u, "names": ns, "reason": r, **({"error": errors[(u, r)]}
-                                        if (u, r) in errors else {})}) + "\n" for (u, r), ns in grouped.items())
+                    errors.setdefault(g, v["error"])
+                if v.get("attempts"):
+                    attempts[g] = max(attempts.get(g, 0), v["attempts"])
+            lines = "".join(json.dumps({"url": u, "names": ns, "reason": r,
+                                        **({"error": errors[(u, r)]} if (u, r) in errors else {}),
+                                        **({"attempts": attempts[(u, r)]} if (u, r) in attempts else {})}) + "\n"
+                            for (u, r), ns in grouped.items())
             write_atomic_sync([os.fspath(jl)], lines.encode("utf-8"), False)
             urls = list(dict.fromkeys(v["url"] for v in merged.values()))
             write_atomic_sync([os.fspath(txt)], "\n".join(urls).encode("utf-8"), False)

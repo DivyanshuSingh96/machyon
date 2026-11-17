@@ -173,7 +173,8 @@ class Downloader:
             obs.finish(outcome)
 
     async def download(self, source, names=None, *, url_col: str | None = None, name_col: str | None = None,
-                       start: int = 0, end: int | None = None, retry_failures: bool = True) -> Report:
+                       start: int = 0, end: int | None = None, retry_failures: bool = True,
+                       retry_permanent: bool = True) -> Report:
         """Download everything in ``source`` into ``save_dir``.
 
         source: a file path (CSV/TSV/TXT/JSON/JSONL/Parquet), a DataFrame, or any iterable of
@@ -184,19 +185,26 @@ class Downloader:
         url_col / name_col: which columns hold the URL / an explicit filename (tables only).
         start / end: only rows ``[start, end)``.
         retry_failures: after the pass, wait briefly and sweep transient failures once more.
+        retry_permanent: rows that ``failed_downloads.jsonl`` already records as permanent failures (404, not an
+            image...) for the same URL are requested again (the default). ``False`` carries them over as failed,
+            with their recorded reason, without a request: ``Report.carried`` counts them.
 
-        Files already present are skipped, so calling this again resumes an interrupted run.
+        Files already present are skipped, so calling this again resumes an interrupted run. Each call has its own
+        retry allowance: a transient failure gets ``1 + max_retries`` attempts in the pass and, with
+        ``retry_failures``, as many again in the final sweep.
         """
         with self._observed("download") as obs:
-            return await self._download(obs, source, names, url_col, name_col, start, end, retry_failures)
+            return await self._download(obs, source, names, url_col, name_col, start, end, retry_failures,
+                                        retry_permanent)
 
-    async def _download(self, obs, source, names, url_col, name_col, start, end, retry_failures) -> Report:
+    async def _download(self, obs, source, names, url_col, name_col, start, end, retry_failures,
+                        retry_permanent=True) -> Report:
         t0 = time.time()
         before = self.metrics.snapshot()
         pairs, total = self._pairs(source, names, url_col, name_col, start, end)
         if obs is not None:
             obs.begin(total)
-        first = await self._pass(pairs, total)
+        first = await self._pass(pairs, total, carry_permanent=not retry_permanent)
         mine = set(self.ledger.call_failed)
         if retry_failures and any(k in self.ledger.failed and not is_permanent(self.ledger.failed[k]["reason"])
                                   for k in mine):
@@ -289,7 +297,7 @@ class Downloader:
             lim._slow_start = False
             logger.info(f"Warm start for {host}: concurrency {lim.limit}")
 
-    async def _pass(self, pairs: Iterable[tuple[str, str]], total: int | None) -> Report:
+    async def _pass(self, pairs: Iterable[tuple[str, str]], total: int | None, carry_permanent: bool = False) -> Report:
         """One pass over the rows (no final sweep)."""
         cfg, m, ledger = self.config, self.metrics, self.ledger
         before = m.snapshot()
@@ -297,7 +305,7 @@ class Downloader:
         ledger.load_once()
         ledger.call_failed = set()
         self._pass_no += 1
-        planner = Planner(self._root, ledger, cfg.verify_existing)
+        planner = Planner(self._root, ledger, cfg.verify_existing, carry_permanent)
         bar = tqdm(total=total, desc="machyon", unit="img", smoothing=0.05, mininterval=0.3,
                    dynamic_ncols=True, disable=not cfg.progress)
         rows = 0
@@ -316,7 +324,11 @@ class Downloader:
                 for url, name, reason, row in plan.prefailed:
                     if ledger.mark_failed(name, url, reason, (id(self), self._pass_no, row)):
                         m.c["failed"] += 1
-                bar.update(plan.skipped + len(plan.prefailed))
+                for url, name, prev in plan.carried:   # failed permanently before: recorded again, not requested
+                    if ledger.mark_failed(name, url, prev["reason"], error=prev.get("error"), attempts=0):
+                        m.c["failed"] += 1
+                    m.c["carried"] += 1
+                bar.update(plan.skipped + len(plan.prefailed) + len(plan.carried))
                 if plan.jobs:
                     hosts.update(j.host for j in plan.jobs[:50])
                     if not self._warm_started:
@@ -341,7 +353,7 @@ class Downloader:
 
 # ---------------------------------------------------------------------- one-call helpers
 
-_CALL_KEYS = ("names", "url_col", "name_col", "start", "end", "retry_failures")
+_CALL_KEYS = ("names", "url_col", "name_col", "start", "end", "retry_failures", "retry_permanent")
 
 
 async def adownload(source, save_dir: str | os.PathLike = "images", names=None, **options) -> Report:

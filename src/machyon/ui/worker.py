@@ -25,7 +25,8 @@ logger = logging.getLogger("machyon.ui")
 CHECKPOINT_S = 2.0   # how often, at most, a running job's progress is saved to run.json (when it has changed)
 # What counts as progress having changed. Not the elapsed time, requests in flight or the concurrency limit: those
 # change on every snapshot, and a download that is stuck doesn't need run.json rewritten every two seconds.
-CHANGES = ("total", "planned", "downloaded", "skipped", "failed", "retries", "throttled", "hedged", "bytes", "phase")
+CHANGES = ("total", "planned", "downloaded", "skipped", "failed", "retries", "retrying", "throttled", "hedged", "bytes",
+           "phase")
 
 
 class CheckpointWriter:
@@ -171,8 +172,12 @@ class Worker:
                 elif self.kind == "retry":
                     report = await dl.retry_failed(include_permanent=self.include_permanent)
                 else:
+                    # A resume asks only for what is left: rows already recorded as permanent failures (404, not an
+                    # image...) keep their outcome without a new request. Retrying those is the Retry button's job,
+                    # which asks first.
                     report = await dl.download(str(self.store.source(run)), run["names"],
-                                               url_col=run["source"].get("url_col"))
+                                               url_col=run["source"].get("url_col"),
+                                               retry_permanent=self.kind != "resume")
         except asyncio.CancelledError:
             self._finish(self._stop_as or "interrupted", None, None)
             return

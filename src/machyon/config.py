@@ -35,7 +35,8 @@ class DownloadConfig:
 
     # --- retries & timeouts -------------------------------------------------------
     max_retries: int = 5
-    """Retries per URL after the first attempt (timeouts, resets, 408/425/429/5xx)."""
+    """Retries per URL after the first attempt (timeouts, resets, 408/425/429/5xx), in each round: the pass and,
+    with ``retry_failures``, the final sweep."""
     backoff: float = 0.5
     """Base seconds for exponential backoff with jitter."""
     timeout: float = 15.0

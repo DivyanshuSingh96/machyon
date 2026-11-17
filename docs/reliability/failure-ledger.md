@@ -32,6 +32,7 @@ When a later run or retry resolves every failure, both files are deleted.
 | `names` | list of strings | Every filename (relative to the save folder) that this URL should have produced. Usually one; several when the same URL appeared on several rows |
 | `reason` | string | Why: one of the [failure reasons](../reference/failure-reasons.md) |
 | `error` | string, optional | The underlying error behind this reason: the first one seen in the run, such as the HTTP status line or what the body started with. It's an example, so rows sharing a reason share it |
+| `attempts` | integer, optional | Requests Machyon has sent for this row so far, added up across runs and retries until it succeeds. Missing for rows that never reached a request (an unusable URL or name) and in ledgers written before 1.2.2 |
 
 The ledger is keyed by filename, not URL, so two rows with the same URL but different names are tracked
 separately.

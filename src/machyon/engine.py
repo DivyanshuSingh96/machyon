@@ -45,11 +45,18 @@ class Engine:
         self.metrics = metrics
         self.host_pause: dict[str, float] = {}
         self._explained: set[str] = set()  # failure reasons already explained to the user
+        self._retrying: set[Job] = set()   # jobs that failed transiently and have no outcome yet
+
+    @property
+    def retrying(self) -> int:
+        """Links that failed transiently and are waiting for, or making, another automatic attempt."""
+        return len(self._retrying)
 
     # ------------------------------------------------------------------ outcomes
 
     def _finish(self, job: Job, ok: bool, reason: str | None, nbytes: int, progress) -> None:
         c, ledger = self.metrics.c, self.ledger
+        self._retrying.discard(job)
         if ok:
             c["downloaded"] += job.rows
             c["deduplicated"] += job.rows - 1
@@ -62,7 +69,7 @@ class Engine:
             reason = reason or "unknown"
             detail = self.fetcher.errors.get(reason, (None, None))[1]
             for rel in job.rel:
-                if ledger.mark_failed(rel, job.url, reason, error=detail):
+                if ledger.mark_failed(rel, job.url, reason, error=detail, attempts=job.sent):
                     c["failed"] += 1
             logger.info(f"FAILED [{reason}] {job.url}" + (f" - {detail}" if detail else ""), extra={"quiet": True})
             if reason not in self._explained and reason != "interrupted":
@@ -198,6 +205,7 @@ class Engine:
                     if self.host_pause.get(job.host, 0.0) > now:
                         continue  # a hedge is a new request too: none while the host has asked us to wait
                     clone = job.clone(len(job.tasks))
+                    job.sent += 1
                     t = loop.create_task(fetcher.attempt(session, clone))
                     job.tasks = (*job.tasks, t)
                     job.started = now               # the next duplicate waits a full threshold after this one
@@ -238,6 +246,7 @@ class Engine:
                     if limiter.in_use > m.peak_concurrency:
                         m.peak_concurrency = limiter.in_use
                     t0 = loop.time()
+                    job.sent += 1
                     try:
                         kind, reason, retry_after, nbytes, _ext = await attempt(job, t0)
                     finally:
@@ -263,6 +272,7 @@ class Engine:
                             self._finish(job, False, reason, 0, progress)
                         else:
                             m.c["retries"] += 1
+                            self._retrying.add(job)
                             cap = min(60.0, cfg.backoff * 2 ** job.attempt)
                             delay = cap / 2 + random.uniform(0, cap / 2)
                             if retry_after is not None:

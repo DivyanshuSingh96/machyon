@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from .disk import TEMP_SUFFIXES
 from .jobs import AUTO_EXT, Job
-from .ledger import MANIFEST, URL_LIST, FailureLedger
+from .ledger import MANIFEST, URL_LIST, FailureLedger, is_permanent
 from .sources import BadName
 from .utils import IMAGE_EXTS, safe_filename, sniff_image, split_host
 
@@ -23,6 +23,7 @@ _normcase = os.path.normcase  # case-insensitive on Windows, identity elsewhere
 class Plan:
     jobs: list[Job] = field(default_factory=list)
     prefailed: list[tuple[str, str, str, int]] = field(default_factory=list)  # (url, name, reason, row)
+    carried: list[tuple[str, str, dict]] = field(default_factory=list)  # (url, name, earlier failure): not requested
     skipped: int = 0
     rows: int = 0
 
@@ -55,11 +56,15 @@ class _Dir:
 
 
 class Planner:
-    def __init__(self, root: str, ledger: FailureLedger, verify_existing: bool = False) -> None:
+    def __init__(self, root: str, ledger: FailureLedger, verify_existing: bool = False,
+                 carry_permanent: bool = False) -> None:
         self.root = root.rstrip(os.sep) or os.sep
         self.prefix = self.root + os.sep
         self.ledger = ledger
         self.verify_existing = verify_existing
+        # A row the ledger already records as a permanent failure (404, not an image...) for the same URL is carried
+        # over as failed instead of being requested again: what a UI Resume does. Off by default: a re-run asks again.
+        self.carry_permanent = carry_permanent
         self._dirs: dict[str, _Dir] = {}
         # Name claims for the WHOLE pass (all shards), as int hashes to keep memory ~70 B/row:
         #   exact target path -> url;  stem of an auto-extension or image-extension name -> url
@@ -154,6 +159,11 @@ class Planner:
                 if rel in ledger:
                     ledger.mark_ok(rel)  # finished since it was recorded as failed
                 continue
+            if self.carry_permanent:
+                prev = ledger.failed.get(rel)
+                if prev is not None and prev["url"] == url and is_permanent(prev["reason"]):
+                    p.carried.append((url, rel, prev))
+                    continue
             if d != root:
                 new_dirs.add(d)
             job = jobs.get(url)
