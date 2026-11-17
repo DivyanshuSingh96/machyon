@@ -1,0 +1,94 @@
+{#- The site header: one bar, edge to edge. The lockup and "Docs" with the version on the left, search in the middle,
+    the project's links and the colour toggle on the right.
+
+    The bar is a three-column grid whose side columns never shrink below their content, so nothing can slide under
+    the search box; narrower screens drop pieces in a fixed order instead (machyon.css). Every piece carries
+    data-mx-item, which the viewport tests use to check that no two overlap at any width.
+
+    Kept from the theme: the hooks its script uses (logo, header-title, search, palette) and its own switches (search
+    becomes an icon below 60em, the drawer button appears below 76.25em). The links are config.extra.social, shared
+    with the footer and the drawer; there is no GitHub widget calling GitHub's API from the visitor's browser. -#}
+{% import "partials/mx-links.html" as mx %}
+{% set class = "md-header mx-topbar" %}
+{% if "navigation.tabs.sticky" in features %}
+  {% set class = class ~ " md-header--shadow md-header--lifted" %}
+{% elif "navigation.tabs" not in features %}
+  {% set class = class ~ " md-header--shadow" %}
+{% endif %}
+<header class="{{ class }}" data-md-component="header">
+  <nav class="md-header__inner mx-topbar__inner" aria-label="{{ lang.t('header') }}">
+    <div class="mx-topbar__start">
+      <label class="md-header__button md-icon mx-topbar__icon" for="__drawer" data-mx-item="menu">
+        {% set icon = config.theme.icon.menu or "material/menu" %}
+        {% include ".icons/" ~ icon ~ ".svg" %}
+        <span class="md-visually-hidden">{{ lang.t('nav') }}</span>
+      </label>
+      <a href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}" title="{{ config.site_name | e }} documentation"
+         class="md-header__button md-logo mx-topbar__logo" aria-label="{{ config.site_name }} documentation"
+         data-md-component="logo" data-mx-item="logo">
+        {% include "partials/logo.html" %}
+      </a>
+      <span class="mx-topbar__docs" aria-hidden="true" data-mx-item="docs">Docs</span>
+      {%- if config.extra.version %}
+      <a class="mx-topbar__version" href="{{ 'project/changelog/' | url }}" data-mx-item="version"
+         title="Machyon {{ config.extra.version }}: what's new">v{{ config.extra.version }}</a>
+      {%- endif %}
+      {#- Kept for the theme's script, which swaps in the page title on scroll; not shown. -#}
+      <div class="md-header__title" data-md-component="header-title" hidden>
+        <div class="md-header__ellipsis">
+          <div class="md-header__topic"><span class="md-ellipsis">{{ config.site_name }}</span></div>
+          <div class="md-header__topic" data-md-component="header-topic">
+            <span class="md-ellipsis">{{ page.meta.title if page.meta and page.meta.title else page.title }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mx-topbar__middle">
+      {% if "search" in config.plugins %}
+        {% set search = config.plugins["search"] | attr("config") %}
+        {% if search.enabled %}
+          {% include "partials/search.html" %}
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <div class="mx-topbar__end">
+      {% if search and search.enabled %}
+        <label class="md-header__button md-icon mx-topbar__icon" for="__search" data-mx-item="search-icon">
+          {% set icon = config.theme.icon.search or "material/magnify" %}
+          {% include ".icons/" ~ icon ~ ".svg" %}
+          <span class="md-visually-hidden">{{ lang.t('search') }}</span>
+        </label>
+      {% endif %}
+      {%- if config.extra.social %}
+      <ul class="mx-topbar__links" aria-label="Machyon elsewhere">
+        {%- for social in config.extra.social %}
+        {%- set link = mx.href(social) %}
+        <li>
+          <a href="{{ link }}" class="mx-topbar__link" title="{{ mx.title(social) | e }}" aria-label="{{ mx.title(social) | e }}"
+             data-mx-item="{{ social.icon | replace('fontawesome/brands/', '') }}"
+             {%- if link[:4] == 'http' %} target="_blank" rel="noopener"{% endif %}>
+            {% include ".icons/" ~ social.icon ~ ".svg" %}
+          </a>
+        </li>
+        {%- endfor %}
+      </ul>
+      <span class="mx-topbar__rule" aria-hidden="true" data-mx-item="rule"></span>
+      {%- endif %}
+      {% if config.theme.palette and not config.theme.palette is mapping %}
+        <div class="mx-topbar__theme" data-mx-item="theme">
+          {% include "partials/palette.html" %}
+        </div>
+      {% endif %}
+      {% if not config.theme.palette is mapping %}
+        {% include "partials/javascripts/palette.html" %}
+      {% endif %}
+    </div>
+  </nav>
+  {% if "navigation.tabs.sticky" in features %}
+    {% if "navigation.tabs" in features %}
+      {% include "partials/tabs.html" %}
+    {% endif %}
+  {% endif %}
+</header>

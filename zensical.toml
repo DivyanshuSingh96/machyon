@@ -130,6 +130,10 @@ repo = "https://github.com/DivyanshuSingh96/machyon"           # used inside pag
 pypi = "https://pypi.org/project/machyon/"
 version = "1.2.3"                                           # the homepage's structured data; must match pyproject.toml
 film = "assets/film/the-arrival-of-opa.mp4"
+# The Discord server's invite code: the part after discord.gg/ of an invite set to never expire, with no limit on
+# uses. Empty until the server opens: the header and footer then link to /discord/, which says it is opening soon.
+# Once set, they link to the invite, and /discord/ sends anyone who opens it (from the README, a post) there too.
+discord_invite = ""
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
@@ -140,6 +144,16 @@ name = "Machyon on GitHub"
 icon = "fontawesome/brands/python"
 link = "https://pypi.org/project/machyon/"
 name = "Machyon on PyPI"
+
+[[project.extra.social]]                 # "discord/" is the site's /discord/ page; see discord_invite above
+icon = "fontawesome/brands/discord"
+link = "discord/"
+name = "Machyon on Discord"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/x-twitter"
+link = "https://x.com/DivyanshuBuilds"
+name = "Divyanshu Singh on X"
 
 # ---------------------------------------------------------------- plugins
 

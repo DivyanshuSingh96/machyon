@@ -1,0 +1,23 @@
+{#- /discord/ (docs/discord.md). While config.extra.discord_invite is empty it is an ordinary page saying the server
+    is opening soon. Once the invite is set, opening /discord/ goes straight to it: the README, posts and anything
+    else outside the docs can link here and never need changing, even if the invite does. -#}
+{% extends "main.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {%- if config.extra.discord_invite %}
+  <meta http-equiv="refresh" content="0; url=https://discord.gg/{{ config.extra.discord_invite }}">
+  {%- endif %}
+{% endblock %}
+
+{% block content %}
+  {%- if config.extra.discord_invite %}
+    {% set invite = "https://discord.gg/" ~ config.extra.discord_invite %}
+    <h1>Machyon on Discord</h1>
+    <p>Taking you to the Machyon Community on Discord. If nothing happens,
+       <a href="{{ invite }}" class="md-button md-button--primary">join it here</a>.</p>
+    <script>location.replace({{ invite | tojson }})</script>
+  {%- else %}
+    {{ super() }}
+  {%- endif %}
+{% endblock %}

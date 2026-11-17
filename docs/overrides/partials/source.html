@@ -1,0 +1,24 @@
+{#- The top of the navigation drawer (phones and tablets): the repository, then the rest of the project's links,
+    which the header hides on narrow screens. Plain links: the theme's version asked GitHub's API for stars and forks
+    on every page view, from the visitor's browser. -#}
+{% import "partials/mx-links.html" as mx %}
+<a href="{{ config.repo_url }}" title="Machyon's source code on GitHub" class="md-source mx-source" target="_blank" rel="noopener">
+  <div class="md-source__icon md-icon">
+    {% include ".icons/fontawesome/brands/github.svg" %}
+  </div>
+  <div class="md-source__repository">DivyanshuSingh96/machyon</div>
+</a>
+{%- set others = config.extra.social | rejectattr("link", "equalto", config.repo_url) | list %}
+{%- if others %}
+<ul class="mx-drawer__links" aria-label="Machyon elsewhere">
+  {%- for social in others %}
+  {%- set link = mx.href(social) %}
+  <li>
+    <a href="{{ link }}" class="mx-drawer__link" title="{{ mx.title(social) | e }}" aria-label="{{ mx.title(social) | e }}"
+       {%- if link[:4] == 'http' %} target="_blank" rel="noopener"{% endif %}>
+      {% include ".icons/" ~ social.icon ~ ".svg" %}
+    </a>
+  </li>
+  {%- endfor %}
+</ul>
+{%- endif %}
