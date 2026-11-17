@@ -41,7 +41,7 @@ class Report:
     latency_p50: float = 0.0
     latency_p95: float = 0.0
     failure_reasons: dict = field(default_factory=dict)
-    failure_examples: dict = field(default_factory=dict)  #: reason -> {"url", "error", "hint"}
+    failure_examples: dict = field(default_factory=dict)  #: reason -> {"url", "error", "hint"}, URLs redacted
     start_time: float = 0.0
     end_time: float = 0.0
 

@@ -25,7 +25,6 @@ import itertools
 import json
 import logging
 import os
-import re
 import secrets
 import shutil
 import signal
@@ -49,6 +48,8 @@ from ..naming import BUILTIN_KEYS, NameTemplate, as_namer
 from ..planner import Planner
 from ..sources import inspect, iter_pairs, read_rows
 from ..utils import IMAGE_EXTS
+from ..utils import redact_text as _redact_text
+from ..utils import redact_url as _redact_url
 from .runs import SOURCE_EXTS, RunStore, sha256_of
 from .worker import Worker
 from .workspace import (
@@ -239,24 +240,14 @@ def validate_template(names, columns) -> str | None:
 
 
 def redact_url(url: str) -> str:
-    """A URL safe to show: no user:password, and query values hidden (signed links carry secrets there)."""
-    try:
-        p = urlsplit(url)
-    except ValueError:
-        return url[:200]
-    host = p.hostname or ""
-    if p.port:
-        host = f"{host}:{p.port}"
-    query = "&".join(f"{part.split('=', 1)[0]}=…" if "=" in part else part for part in p.query.split("&") if part)
-    return f"{p.scheme}://{host}{p.path}" + (f"?{query}" if query else "")
-
-
-_URL_IN_TEXT = re.compile(r"""https?://[^\s'"<>()\[\]]+""")
+    """A URL safe to show in the page: no user:password, and every query value hidden (signed links carry secrets
+    there)."""
+    return _redact_url(url, all_values=True)
 
 
 def redact_text(text):
     """An error message safe to show: every URL in it redacted. Errors often repeat the URL, query string and all."""
-    return _URL_IN_TEXT.sub(lambda m: redact_url(m.group(0)), text) if isinstance(text, str) else text
+    return _redact_text(text, all_values=True)
 
 
 def check_paste(text: str) -> tuple[list[str], list[dict], int]:

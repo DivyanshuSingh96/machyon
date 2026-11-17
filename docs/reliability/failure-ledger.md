@@ -33,6 +33,7 @@ When a later run or retry resolves every failure, both files are deleted.
 | `reason` | string | Why: one of the [failure reasons](../reference/failure-reasons.md) |
 | `error` | string, optional | The underlying error behind this reason: the first one seen in the run, such as the HTTP status line or what the body started with. It's an example, so rows sharing a reason share it |
 | `attempts` | integer, optional | Requests Machyon has sent for this row so far, added up across runs and retries until it succeeds. Missing for rows that never reached a request (an unusable URL or name) and in ledgers written before 1.2.2 |
+| `hedges` | integer, optional | How many of those requests were duplicates sent to a slow URL ([hedging](retries-and-rate-limits.md#hedging-no-straggler-tax)). Never more than 3 for one row, however many times it is retried or resumed. Missing when there were none, and in ledgers written before 1.2.3 |
 
 The ledger is keyed by filename, not URL, so two rows with the same URL but different names are tracked
 separately.
@@ -53,6 +54,9 @@ jq -r 'select(.reason == "http_404") | .url' images/failed_downloads.jsonl > dea
 Inside a running program you don't need the file at all: [`Downloader.failures`][machyon.Downloader.failures]
 lists the current failures as dicts, [`failure_reasons()`][machyon.Downloader.failure_reasons] counts them, and
 [`Report.failure_reasons`][machyon.Report] and `Report.failure_examples` describe the failures of one call.
+`failure_examples` gives one URL, its error and a hint for every reason, including reasons whose rows were only
+carried over from an earlier session; those take their example from this file, the lowest URL first. Example URLs
+never show a `user:password`, and query values that look like secrets (tokens, signatures, keys) appear as `…`.
 
 ## How it stays correct
 
@@ -68,6 +72,7 @@ lists the current failures as dicts, [`failure_reasons()`][machyon.Downloader.fa
 | Reason | Usually means | Try |
 |---|---|---|
 | `http_404`, `http_410` | The image is gone | Nothing will fix it. Drop the rows or find a new source |
+| `http_400`, `http_401` | The URL or its parameters were rejected, or a login is needed | Check the URL; pass cookies or an `Authorization` header with `headers=` |
 | `http_403`, `not_image` | Hotlink protection, a login wall or a bot check | `--referer` with the page the image appears on; [troubleshooting](../troubleshooting/index.md#403-or-not_image-on-every-url) |
 | `http_429`, `http_5xx`, `timeout` | The server was overloaded or rate limiting | `machyon retry -o images/` later, perhaps with a lower `--max-concurrency` |
 | `ssl_certificate` | The certificate couldn't be verified | `machyon doctor <url>`; [troubleshooting](../troubleshooting/index.md#ssl_certificate-errors) |

@@ -27,11 +27,12 @@ from .ledger import FailureLedger
 from .limiter import AdaptiveLimiter
 from .metrics import MetricsEngine
 from .session import NetworkSessionManager
+from .utils import redact_text, redact_url
 
 logger = logging.getLogger("machyon.engine")
 
 MAX_RACING = 3     # attempts of one job in flight at once: the original and up to two duplicates
-MAX_HEDGES = 3     # duplicates per job over the whole run
+MAX_HEDGES = 3     # duplicates per logical job: every attempt, both rounds, Resume and Retry (kept in the ledger)
 
 
 class Engine:
@@ -69,13 +70,14 @@ class Engine:
             reason = reason or "unknown"
             detail = self.fetcher.errors.get(reason, (None, None))[1]
             for rel in job.rel:
-                if ledger.mark_failed(rel, job.url, reason, error=detail, attempts=job.sent):
+                if ledger.mark_failed(rel, job.url, reason, error=detail, attempts=job.sent, hedges=job.hedges):
                     c["failed"] += 1
-            logger.info(f"FAILED [{reason}] {job.url}" + (f" - {detail}" if detail else ""), extra={"quiet": True})
+            shown, said = redact_url(job.url), redact_text(detail)   # logs never carry user:password or tokens
+            logger.info(f"FAILED [{reason}] {shown}" + (f" - {said}" if said else ""), extra={"quiet": True})
             if reason not in self._explained and reason != "interrupted":
                 self._explained.add(reason)
                 tip = hint(reason)
-                logger.warning(f"{reason}: {detail or 'see failed_downloads.jsonl'} ({job.url})"
+                logger.warning(f"{reason}: {said or 'see failed_downloads.jsonl'} ({shown})"
                                + (f"\n  -> {tip}" if tip else ""))
         if progress is not None:
             progress.update(job.rows)
@@ -198,19 +200,28 @@ class Engine:
                     if job.fut is None or job.fut.done() or now - job.started < thresh:
                         continue
                     # A duplicate can stall too (it is just another request): once the newest attempt has
-                    # also taken longer than the threshold, start another, up to MAX_RACING at once and
-                    # MAX_HEDGES per job.
-                    if len(job.tasks) > MAX_HEDGES or sum(not t.done() for t in job.tasks) >= MAX_RACING:
+                    # also taken longer than the threshold, start another, up to MAX_RACING at once. The job's
+                    # own allowance, MAX_HEDGES, covers its whole life (job.hedges starts from the ledger), not
+                    # one attempt: a retry, the final sweep or a Resume doesn't refill it.
+                    if job.hedges >= MAX_HEDGES or sum(not t.done() for t in job.tasks) >= MAX_RACING:
                         continue
                     if self.host_pause.get(job.host, 0.0) > now:
                         continue  # a hedge is a new request too: none while the host has asked us to wait
-                    clone = job.clone(len(job.tasks))
+                    # Reserve both allowances before scheduling; nothing awaits between the checks above and
+                    # here, so no other coroutine can take the same last slot. Given back if it can't start.
+                    state["hedge_budget"] -= 1
+                    job.hedges += 1
+                    try:
+                        clone = job.clone(len(job.tasks))
+                        t = loop.create_task(fetcher.attempt(session, clone))
+                    except Exception:
+                        state["hedge_budget"] += 1
+                        job.hedges -= 1
+                        raise
                     job.sent += 1
-                    t = loop.create_task(fetcher.attempt(session, clone))
                     job.tasks = (*job.tasks, t)
                     job.started = now               # the next duplicate waits a full threshold after this one
                     t.add_done_callback(lambda tt, j=job, cl=clone: hedge_done(j, cl, tt))
-                    state["hedge_budget"] -= 1
                     m.c["hedged"] += 1
 
         # ---- workers ---------------------------------------------------------------

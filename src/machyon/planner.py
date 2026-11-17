@@ -168,9 +168,12 @@ class Planner:
                 new_dirs.add(d)
             job = jobs.get(url)
             if job is None:
-                jobs[url] = Job(url, path, rel, host)
+                job = jobs[url] = Job(url, path, rel, host)
             else:
                 job.add(path, rel)
+            prev = ledger.failed.get(rel)
+            if prev is not None and prev["url"] == url and prev.get("hedges"):
+                job.hedges = max(job.hedges, prev["hedges"])   # the same logical job: its duplicates stay used
         for d in new_dirs:
             os.makedirs(d, exist_ok=True)
         p.jobs = list(jobs.values())

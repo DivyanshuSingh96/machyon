@@ -92,6 +92,11 @@ drained, any request that has taken longer than `max(0.75 s, 2 × the p90 latenc
 The first good answer wins and the others are cancelled. A duplicate can stall too; if it hasn't answered within
 the same threshold, the request gets another, up to three duplicates.
 
+Those three are for the row's whole life, not for each attempt. Retries, the final sweep, Resume and
+`machyon retry` all continue from what the row has already used, which `failed_downloads.jsonl` keeps as `hedges`.
+A URL that never answers costs at most `2 × (1 + max_retries)` attempts in one call plus three duplicates in
+total: 15 requests with the defaults. A new save folder is a new job and starts from zero.
+
 - Hedging only happens at the tail, never while there is still queued work.
 - It's budgeted: at most `max(16, 5% of the jobs)` duplicates per shard that don't win. A duplicate that wins
   replaced a stuck request rather than adding one, so it doesn't count.

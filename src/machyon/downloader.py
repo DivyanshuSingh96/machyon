@@ -38,7 +38,7 @@ from .planner import Planner
 from .progress import ProgressSnapshot, _Observer
 from .session import NetworkSessionManager
 from .sources import iter_pairs, read_rows
-from .utils import run, setup_logging
+from .utils import redact_text, redact_url, run, setup_logging
 
 logger = logging.getLogger("machyon")
 
@@ -215,7 +215,7 @@ class Downloader:
         still = [k for k in mine if k in self.ledger.failed]
         reasons = self.ledger.reasons(still)
         r = self.metrics.report(before, t0, first.total, len(still), reasons, self.limiter.limit,
-                                self._examples(reasons))
+                                self._examples(reasons, still))
         self.last_report = r
         if self.config.metrics_dir and self._auto_metrics and r.total:
             try:
@@ -256,11 +256,27 @@ class Downloader:
 
     # ------------------------------------------------------------------ internals
 
-    def _examples(self, reasons) -> dict:
+    def _examples(self, reasons, keys) -> dict:
+        """For each reason: one URL that failed with it, the error behind it, and a hint.
+
+        The example is this session's own (the first request that failed this way) when that URL is one of the
+        report's rows. A row carried over from an earlier session wasn't requested now, so its reason has no such
+        example: it comes from the ledger instead, URL and error from the same entry, the lowest URL first so the
+        same rows always give the same example. Both are redacted: no user:password, no secret-looking query values.
+        Choosing an example never changes a count."""
+        rows: dict[str, list[dict]] = {}
+        for k in keys:
+            e = self.ledger.failed.get(k)
+            if e is not None:
+                rows.setdefault(e["reason"], []).append(e)
         out = {}
         for reason in reasons:
             url, err = self.fetcher.errors.get(reason, (None, None))
-            out[reason] = {"url": url, "error": err, "hint": hint(reason)}
+            mine = rows.get(reason)
+            if mine and (url is None or url not in {e["url"] for e in mine}):
+                e = min(mine, key=lambda e: (e["url"], e["name"]))
+                url, err = e["url"], e.get("error")
+            out[reason] = {"url": url and redact_url(url), "error": redact_text(err), "hint": hint(reason)}
         return out
 
     def _pairs(self, source, names, url_col, name_col, start, end):
@@ -343,7 +359,8 @@ class Downloader:
                 self._profiles.save(hosts.most_common(1)[0][0], self.limiter.limit, self.limiter.rate)
         failed_keys = [k for k in ledger.call_failed if k in ledger.failed]
         reasons = ledger.reasons(failed_keys)
-        r = m.report(before, t0, rows, len(failed_keys), reasons, self.limiter.limit, self._examples(reasons))
+        r = m.report(before, t0, rows, len(failed_keys), reasons, self.limiter.limit,
+                     self._examples(reasons, failed_keys))
         logger.info(str(r))
         if failed_keys:
             logger.info(f"Failures listed in {self.save_dir / 'failed_downloads.jsonl'}")

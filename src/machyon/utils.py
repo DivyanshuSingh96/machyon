@@ -8,6 +8,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PACKAGE_LOGGER = "machyon"
 
@@ -112,6 +113,46 @@ def split_host(url: str) -> str | None:
     else:
         host = hostport.partition(":")[0]
     return host.lower() or None
+
+
+#: Query keys whose values are secrets often enough that a URL shown to people hides them: signed links, API keys,
+#: session tokens. Matched case-insensitively, as a whole key or as part of one.
+_SECRET_KEYS = frozenset({"key", "sig", "code", "pwd", "pass", "jwt", "policy", "accesskey", "access_key"})
+_SECRET_PARTS = ("token", "secret", "passw", "auth", "credential", "session", "signature", "apikey", "api_key",
+                 "api-key", "private")
+
+
+def _secret_key(k: str) -> bool:
+    k = k.lower()
+    return k in _SECRET_KEYS or any(p in k for p in _SECRET_PARTS)
+
+
+def redact_url(url: str, all_values: bool = False) -> str:
+    """A URL safe to show: never a user:password, and query values that look like secrets hidden (``…``). With
+    ``all_values``, every query value is hidden (what machyon ui shows). Keys stay, so the URL still says what it was."""
+    try:
+        p = urlsplit(url)
+    except ValueError:
+        return url[:200]
+    host = p.hostname or ""
+    if p.port:
+        host = f"{host}:{p.port}"
+    parts = []
+    for part in p.query.split("&"):
+        if not part:
+            continue
+        k, eq, _v = part.partition("=")
+        parts.append(f"{k}=…" if eq and (all_values or _secret_key(k)) else part)
+    query = "&".join(parts)
+    return f"{p.scheme}://{host}{p.path}" + (f"?{query}" if query else "")
+
+
+_URL_IN_TEXT = re.compile(r"""https?://[^\s'"<>()\[\]]+""")
+
+
+def redact_text(text, all_values: bool = False):
+    """Text safe to show: every URL in it redacted (errors often repeat the URL, query string and all)."""
+    return _URL_IN_TEXT.sub(lambda m: redact_url(m.group(0), all_values), text) if isinstance(text, str) else text
 
 
 def url_path_parts(url: str) -> tuple[str, str]:

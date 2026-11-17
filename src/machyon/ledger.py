@@ -54,21 +54,27 @@ class FailureLedger:
         return name
 
     def mark_failed(self, name: str, url: str, reason: str, row=None, error: str | None = None,
-                    attempts: int | None = None) -> bool:
+                    attempts: int | None = None, hedges: int | None = None) -> bool:
         """Record a failure; returns True if it's newly counted.
 
         attempts: requests sent for the row by the call recording it. They are added to what earlier calls recorded
-        for the same row and URL, so ``attempts`` in failed_downloads.jsonl is the row's total so far."""
+        for the same row and URL, so ``attempts`` in failed_downloads.jsonl is the row's total so far.
+        hedges: duplicate requests the row's job has used in its whole life (already a total: the planner starts
+        each job from this record), so a later Retry, final sweep or Resume can't refill the allowance."""
         k = self.key(name, url, reason, row)
         prev = self.failed.get(k)
         self.cleared.discard(k)
         self.failed[k] = {"url": url, "reason": reason, "name": name}
         if error:
             self.failed[k]["error"] = error
+        same = prev is not None and prev["url"] == url
         if attempts is not None:
-            total = attempts + (prev.get("attempts", 0) if prev is not None and prev["url"] == url else 0)
+            total = attempts + (prev.get("attempts", 0) if same else 0)
             if total:
                 self.failed[k]["attempts"] = total
+        used = max(hedges or 0, prev.get("hedges", 0) if same else 0)
+        if used:
+            self.failed[k]["hedges"] = used
         self.call_failed.add(k)
         if k not in self.counted:
             self.counted.add(k)
@@ -147,8 +153,9 @@ class FailureLedger:
                 out[k] = {"url": e["url"], "reason": reason, "name": n}
                 if e.get("error"):
                     out[k]["error"] = e["error"]
-                if isinstance(e.get("attempts"), int) and e["attempts"] > 0:
-                    out[k]["attempts"] = e["attempts"]
+                for field in ("attempts", "hedges"):
+                    if isinstance(e.get(field), int) and e[field] > 0:
+                        out[k][field] = e[field]
         return out
 
     def write(self) -> None:
@@ -193,6 +200,7 @@ class FailureLedger:
             grouped: dict[tuple[str, str], list[str]] = {}
             errors: dict[tuple[str, str], str] = {}
             attempts: dict[tuple[str, str], int] = {}   # one URL's rows share its requests
+            hedges: dict[tuple[str, str], int] = {}
             for v in merged.values():
                 g = (v["url"], v["reason"])
                 grouped.setdefault(g, []).append(v["name"])
@@ -200,9 +208,12 @@ class FailureLedger:
                     errors.setdefault(g, v["error"])
                 if v.get("attempts"):
                     attempts[g] = max(attempts.get(g, 0), v["attempts"])
+                if v.get("hedges"):
+                    hedges[g] = max(hedges.get(g, 0), v["hedges"])
             lines = "".join(json.dumps({"url": u, "names": ns, "reason": r,
                                         **({"error": errors[(u, r)]} if (u, r) in errors else {}),
-                                        **({"attempts": attempts[(u, r)]} if (u, r) in attempts else {})}) + "\n"
+                                        **({"attempts": attempts[(u, r)]} if (u, r) in attempts else {}),
+                                        **({"hedges": hedges[(u, r)]} if (u, r) in hedges else {})}) + "\n"
                             for (u, r), ns in grouped.items())
             write_atomic_sync([os.fspath(jl)], lines.encode("utf-8"), False)
             urls = list(dict.fromkeys(v["url"] for v in merged.values()))
