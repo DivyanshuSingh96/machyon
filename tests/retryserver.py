@@ -10,6 +10,7 @@ request is counted per path, so a test can say exactly how many times Machyon as
     /flaky/<n>.png?k=K 500 for the first K requests, then the PNG
     /e429/<n>.png?s=S  429 with Retry-After: S for the first request, then the PNG
     /slow/<n>.png?d=D  the PNG after D seconds (keeps work in flight, for stopping mid-run)
+    /status/<n>.png?c=C  status C (400, 401, 410, 418...), every time
 
 Runs in a thread with its own event loop; ``counts()`` and ``times()`` read what it saw.
 """
@@ -94,6 +95,8 @@ class RetryServer:
             if seen == 1:
                 return web.Response(status=429, headers={"Retry-After": request.query.get("s", "1")})
             return web.Response(body=PNG, content_type="image/png")
+        if kind == "status":
+            return web.Response(status=int(request.query.get("c", "400")), text="no")
         if kind == "slow":
             await asyncio.sleep(float(request.query.get("d", "1")))
             return web.Response(body=PNG, content_type="image/png")

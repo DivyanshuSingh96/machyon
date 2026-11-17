@@ -128,7 +128,7 @@ toggle.name = "Switch to system preference"
 [project.extra]
 repo = "https://github.com/DivyanshuSingh96/machyon"           # used inside pages
 pypi = "https://pypi.org/project/machyon/"
-version = "1.2.2"                                           # the homepage's structured data; must match pyproject.toml
+version = "1.2.3"                                           # the homepage's structured data; must match pyproject.toml
 film = "assets/film/the-arrival-of-opa.mp4"
 
 [[project.extra.social]]

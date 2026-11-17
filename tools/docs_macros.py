@@ -58,8 +58,12 @@ GROUPS = [("Concurrency", "concurrency"), ("Retries and timeouts", "max_retries"
 #: Every failure reason Machyon can record: (reason, where it comes from, what it means).
 #: tests/test_docs.py fails if the source gains a reason this list doesn't explain.
 REASONS = [
-    ("http_404", "server", "The server answered 404 Not Found: the image is gone. Any other 4xx except 408, 425 and 429 is recorded the same way, as `http_<code>`."),
+    ("http_404", "server", "The server answered 404 Not Found: the image is gone."),
+    ("http_410", "server", "410 Gone: the server says the image was removed for good."),
     ("http_403", "server", "The server refused access (hotlink protection, login, bot check or a block)."),
+    ("http_401", "server", "401 Unauthorized: the server wants a login or credentials before it answers."),
+    ("http_400", "server", "400 Bad Request: the server rejected the URL or its query parameters."),
+    ("http_4xx", "server", "Any other 4xx except 408, 425 and 429, recorded as `http_<code>` (`http_418`, `http_451`, ...). Never retried."),
     ("http_429", "server", "Rate limited on every attempt. Each 429 also paused the whole host, honouring `Retry-After`."),
     ("http_5xx", "server", "`http_500`, `http_502`, `http_503`, `http_504`, `http_520` to `http_524`: server errors that persisted through every retry."),
     ("http_408", "server", "Request timeout or `425 Too Early`, persisting through every retry."),
@@ -172,7 +176,7 @@ def define_env(env) -> None:
         """Every reason, anchored, with whether a retry can fix it (computed by the library) and Machyon's own hint."""
         out = ['<div class="mx-opts">']
         for reason, source, meaning in REASONS:
-            probe = {"http_5xx": "http_503", "write_error:<errno>": "write_error:13",
+            probe = {"http_5xx": "http_503", "http_4xx": "http_418", "write_error:<errno>": "write_error:13",
                      "error:<Type>": "error:KeyError"}.get(reason, reason)
             if reason in ("interrupted", "cancelled"):
                 tag = '<span class="mx-tag">run again to resume</span>'

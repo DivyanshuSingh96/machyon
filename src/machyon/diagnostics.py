@@ -11,7 +11,12 @@ import urllib.request
 
 import aiohttp
 
+from .ledger import RETRY_STATUSES
 from .utils import DEFAULT_USER_AGENT, sniff_image, split_host
+
+#: What any other permanent 4xx means: the specific ones above (400, 401, 403, 404, 410, 429) say more.
+HTTP_4XX_HINT = ("The server rejected the request. Check the URL, access permissions, request headers and the "
+                 "server's requirements.")
 
 HINTS = {
     "ssl_certificate": (
@@ -24,7 +29,11 @@ HINTS = {
     "timeout": "The server was too slow. Raise --timeout, or lower --max-concurrency if your link is saturated.",
     "http_403": "The server refused access. Try --referer with the site's page URL, headers such as cookies, "
                 "or slow down; you may be blocked or need to log in.",
+    "http_400": "The URL or its parameters were rejected by the server. Check the URL and the parameters it requires.",
+    "http_401": "Authentication is required. The resource may need a login or credentials, such as cookies or "
+                "authorization headers.",
     "http_404": "The image no longer exists at that URL.",
+    "http_410": "The resource has been permanently removed and is no longer available at this URL.",
     "http_429": "Rate limited even after backing off. Re-run later or lower --max-concurrency.",
     "not_image": "The server answered with something that isn't an image (an HTML error, login or bot-check page).",
     "truncated": "The connection dropped mid-download; it was retried.",
@@ -36,6 +45,10 @@ def hint(reason: str) -> str | None:
         return HINTS[reason]
     if reason.startswith("http_5"):
         return "Server error; it was retried. Re-run `machyon retry` later."
+    if reason.startswith("http_4") and reason[5:].isdigit():
+        if int(reason[5:]) in RETRY_STATUSES:     # 408, 425: retried like a server error, not a rejection
+            return "The server timed out or asked to try again later; it was retried. Re-run `machyon retry` later."
+        return HTTP_4XX_HINT
     if reason.startswith("write_error"):
         return "Could not write the file (permissions, file locked by another program, or disk problem)."
     return None

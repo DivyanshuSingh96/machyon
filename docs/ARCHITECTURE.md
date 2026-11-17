@@ -83,7 +83,7 @@ The limiter works in measurement windows: at least 1 s long, and with about one 
 This runs only when the ready-queue is empty (the tail). For an in-flight job older than `max(0.75 s, 2 × p90 latency)`, start a duplicate attempt.
 
 - The first **ok** wins and the others are cancelled.
-- If a duplicate fails transiently, or stalls too (no answer within the threshold of its own start), the job gets another duplicate: at most 3 attempts in flight and 3 duplicates per job.
+- If a duplicate fails transiently, or stalls too (no answer within the threshold of its own start), the job gets another duplicate: at most 3 attempts in flight and 3 duplicates per job. The 3 count the job's whole life (`Job.hedges`, saved in the ledger as `hedges`), so retries, the final sweep and Resume never refill them. A duplicate is reserved against both the job's allowance and the shard's budget before it is scheduled.
 - The hedge budget is `max(16, 5% of jobs)` per shard. A duplicate that wins is given back, because it replaced a stuck or failed request instead of adding one; the budget limits the duplicates that turned out unnecessary.
 - Duplicates write through unique temp files, so racing writers can't corrupt each other.
 

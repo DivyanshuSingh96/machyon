@@ -8,7 +8,7 @@ AUTO_EXT = ".{ext}"
 
 
 class Job:
-    __slots__ = ("url", "paths", "rel", "host", "rows", "attempt", "sent", "part", "part_size", "validator",
+    __slots__ = ("url", "paths", "rel", "host", "rows", "attempt", "sent", "hedges", "part", "part_size", "validator",
                  "tag", "started", "fut", "tasks", "ext", "landed")
 
     def __init__(self, url: str, path: str, rel: str, host: str, tag: str = "") -> None:
@@ -19,6 +19,7 @@ class Job:
         self.rows = 1               # input rows served by this URL
         self.attempt = 0            # transient failures so far: the retry allowance used
         self.sent = 0               # requests sent for this job, duplicates (hedges) included
+        self.hedges = 0             # duplicates this logical job has used: all attempts, rounds and sessions (ledger)
         self.part: str | None = None    # in-progress .machpart (streamed bodies only)
         self.part_size = 0
         self.validator: str | None = None  # strong ETag / Last-Modified for If-Range resume
