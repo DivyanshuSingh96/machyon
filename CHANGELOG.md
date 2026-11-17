@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.2 (2026-11-17)
+
+**Fixed**
+
+- **Resume** in `machyon ui` asked again for every row that had already failed permanently (a 404, a page that isn't an image), once per Resume, while **Retry failures** asks you to confirm before doing exactly that. Resume now leaves those rows failed with their recorded reason and sends them no request. Rows that failed transiently, or were interrupted, get a new bounded set of retries as before.
+- The **Retries** count in `machyon ui` counted retry attempts across every link and both rounds (the pass and the final sweep), with nothing saying how many links were still being retried, so it could look as if a run was retrying forever. It is now **Retry attempts**, next to a new **Waiting to retry** count of links, and the final sweep says what it is while it runs.
+
+**Added**
+
+- `Downloader.download(retry_permanent=False)` (and `machyon.download(..., retry_permanent=False)`): rows `failed_downloads.jsonl` already records as permanent failures for the same URL keep that outcome without a request. `Report.carried` counts them. The default is unchanged, so running a download again still asks for every unfinished row, as documented.
+- `ProgressSnapshot.retrying`: how many links failed transiently and are waiting for, or making, another automatic attempt.
+- `failed_downloads.jsonl` records `attempts` for each failed row: the requests sent for it so far, added up across runs until it succeeds. `machyon ui` shows it in the failures table.
+
+**Documentation**
+
+- Retries and rate limits has a new section, **How many attempts a URL gets**: per URL and per call, a permanent failure is requested once, and a transient one gets `1 + max_retries` attempts in the pass and as many in the final sweep (12 with the defaults). Each new call, including a Resume, has its own budget. It also says what the counters count, and that aiohttp re-sends a request once by itself when a reused connection drops.
+- Resuming explains `retry_permanent=False` and what Resume in `machyon ui` does; the failure ledger documents `attempts`.
+
+**Tests**
+
+- `tests/retryserver.py` is a local server whose URLs always answer the same way (an image, 404, HTML instead of an image, 500, a dropped connection, no answer, 500 then an image, 429 then an image) and which counts every request per URL. `tests/test_retry_bounds.py` uses it to check the exact number of requests per URL for each kind of failure, at `max_retries` 0, 2, 5 and 20. It also covers re-runs, stopping mid-retry, 400 URLs with 64 workers (one request each), a 429 that pauses only its own host for its Retry-After, the new progress count, and `machyon ui` stopped and resumed three times with permanent failures never asked for again.
+
 ## 2026-11-17
 
 **Fixed**
