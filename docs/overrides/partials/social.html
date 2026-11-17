@@ -1,0 +1,11 @@
+{#- The footer's links: the same list and the same destinations as the header (partials/mx-links.html). -#}
+{% import "partials/mx-links.html" as mx %}
+<div class="md-social">
+  {% for social in config.extra.social %}
+    {% set link = mx.href(social) %}
+    <a href="{{ link }}" title="{{ mx.title(social) | e }}" class="md-social__link"
+       {%- if link[:4] == 'http' %} target="_blank" rel="noopener"{% endif %}>
+      {% include ".icons/" ~ social.icon ~ ".svg" %}
+    </a>
+  {% endfor %}
+</div>

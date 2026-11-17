@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-11-17: documentation header
+
+**Changed**
+
+- The documentation has a new header: one bar across the full width of the window, with the tabs beneath it on the same background. The logo, "Docs" and the version (which opens the changelog) are on the left, search is in the middle, and links to GitHub, PyPI, Discord and X sit on the right next to the colour toggle. The first tab lines up with the logo. Search shows its shortcut as a key: Ctrl K, or ⌘ K on a Mac.
+- On narrower screens the header gives way in a fixed order: search becomes an icon below 960 px, the links move into the navigation drawer below 640 px, then the version and "Docs" make room for the logo. It was checked at every width from 280 to 2560 px and on every device in Chrome's device list, in light and dark: nothing overlaps or leaves the screen.
+- The GitHub box in the header and the navigation drawer is now a plain link. It used to ask GitHub's API for the repository's stars and forks on every page view, from the visitor's browser; once GitHub rate-limited a visitor, it showed an error in the console and no numbers.
+
+**Added**
+
+- A **Machyon on Discord** page at `/discord/`. Until the server opens it says so, and where to ask in the meantime. When `discord_invite` in `zensical.toml` is set to an invite code, the header, footer and drawer link straight to Discord and `/discord/` forwards there, so links to `/discord/` from the README or elsewhere keep working even if the invite changes.
+- `tools/check_header.py` checks the header at every width from 280 to 2560 px and on every device in Playwright's and Chrome's device lists, in light and dark, for pieces that overlap, leave the screen or sit off the bar's centre line. It needs Playwright, which isn't a dependency of the project.
+
+**Fixed**
+
+- The navigation drawer on phones showed a tiny logo with the site's name repeated beside it. It now shows the logo at the header's size, with the project's links under the repository.
+
+**Tests**
+
+- `tests/test_site.py` checks the header's links and version on every page, the drawer's links, the Discord page with and without an invite, that every piece of the header is marked for `tools/check_header.py`, and that no page includes the GitHub widget.
+
 ## 1.2.3 (2026-11-17)
 
 **Fixed**

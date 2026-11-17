@@ -1,0 +1,22 @@
+{#- Where each of config.extra.social points, for the header and the footer.
+
+    A link that isn't absolute is a page of this site ("discord/"). The Discord entry goes straight to the invite once
+    config.extra.discord_invite holds one: an in-site link wouldn't do, because instant navigation loads the next page
+    without running its redirect. Until then it is the /discord/ page, which says the server is opening soon. -#}
+{% macro href(social) -%}
+  {%- if social.link == "discord/" and config.extra.discord_invite -%}
+    https://discord.gg/{{ config.extra.discord_invite }}
+  {%- elif social.link[:4] == "http" -%}
+    {{ social.link }}
+  {%- else -%}
+    {{ social.link | url }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro title(social) -%}
+  {%- if social.link == "discord/" and not config.extra.discord_invite -%}
+    {{ social.name }} (opening soon)
+  {%- else -%}
+    {{ social.name }}
+  {%- endif -%}
+{%- endmacro %}

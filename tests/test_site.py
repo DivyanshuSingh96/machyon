@@ -14,6 +14,7 @@ import tomllib
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urljoin
 
 import pytest
 
@@ -414,3 +415,115 @@ def test_film_page_player_and_structured_data(site):
 def test_film_is_linked_from_the_homepage_and_reliability(site):
     for rel in ("index.html", "reliability/index.html"):
         assert "project/film/" in (site["folder"] / rel).read_text(encoding="utf-8"), rel
+
+
+# ---------------------------------------------------------------------------------------- header
+
+class HeaderLinks(HTMLParser):
+    """The header's links (GitHub, PyPI, Discord, X), its version chip and anything that would call GitHub's API."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.links: list[dict] = []
+        self.version: dict | None = None
+        self.version_text = ""
+        self.source_widget = False
+        self._in_header = self._in_version = False
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        cls = a.get("class") or ""
+        if tag == "header" and "md-header" in cls:
+            self._in_header = True
+        if a.get("data-md-component") == "source":      # the theme's widget that fetches stars from api.github.com
+            self.source_widget = True
+        if self._in_header and tag == "a" and "mx-topbar__link" in cls:
+            self.links.append(a)
+        elif self._in_header and tag == "a" and "mx-topbar__version" in cls:
+            self.version, self._in_version = a, True
+
+    def handle_endtag(self, tag):
+        if tag == "header":
+            self._in_header = False
+        elif tag == "a":
+            self._in_version = False
+
+    def handle_data(self, data):
+        if self._in_version:
+            self.version_text += data
+
+
+@pytest.fixture(scope="module")
+def headers(site) -> dict:
+    out = {}
+    for rel in site["pages"]:
+        h = HeaderLinks()
+        h.feed((site["folder"] / rel).read_text(encoding="utf-8"))
+        out[rel] = h
+    return out
+
+
+def _extra() -> dict:
+    return tomllib.loads((ROOT / "zensical.toml").read_text(encoding="utf-8"))["project"]["extra"]
+
+
+def test_header_links_and_version_on_every_page(site, headers):
+    extra = _extra()
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    invite = extra.get("discord_invite", "")
+    names = [s["name"] for s in extra["social"]]
+    assert names == ["Machyon on GitHub", "Machyon on PyPI", "Machyon on Discord", "Divyanshu Singh on X"]
+    for rel, h in headers.items():
+        if rel == "404.html":
+            continue
+        page = site["url"] + rel.removesuffix("index.html")
+        assert [a["aria-label"].removesuffix(" (opening soon)") for a in h.links] == names, rel
+        for a, social in zip(h.links, extra["social"], strict=True):
+            if social["link"] == "discord/":
+                if invite:
+                    assert a["href"] == f"https://discord.gg/{invite}" and a.get("target") == "_blank", rel
+                else:   # the /discord/ page of this site, relative to the page
+                    assert urljoin(page, a["href"]) == site["url"] + "discord/", rel
+                    assert a["aria-label"].endswith("(opening soon)") and "target" not in a, rel
+            else:
+                assert a["href"] == social["link"] and a.get("rel") == "noopener" and a.get("target") == "_blank", rel
+        page = site["url"] + rel.removesuffix("index.html")
+        assert h.version_text == f"v{version}", rel
+        assert urljoin(page, h.version["href"]) == site["url"] + "project/changelog/", rel
+        assert not h.source_widget, rel     # no page asks GitHub's API for stars from the visitor's browser
+
+
+def test_discord_page_waits_or_redirects_by_the_configured_invite(site):
+    invite = _extra().get("discord_invite", "")
+    assert invite == "" or (invite.isascii() and invite.replace("-", "").isalnum() and len(invite) <= 32)
+    html = (site["folder"] / "discord/index.html").read_text(encoding="utf-8")
+    if invite:
+        assert f'<meta http-equiv="refresh" content="0; url=https://discord.gg/{invite}">' in html
+        assert f'location.replace("https://discord.gg/{invite}")' in html
+    else:
+        assert 'http-equiv="refresh"' not in html and "location.replace" not in html
+        assert "opening soon" in html
+    assert site["pages"]["discord/index.html"].canonical == site["url"] + "discord/"
+
+
+def test_drawer_has_the_repository_and_the_other_links(site):
+    extra = _extra()
+    others = [x for x in extra["social"] if x["link"] != extra["repo"]]
+    html = (site["folder"] / "guides/input-sources/index.html").read_text(encoding="utf-8")
+    drawer = html.split('class="md-nav__source"', 1)[1].split("</ul>", 1)[0]
+    assert 'href="https://github.com/DivyanshuSingh96/machyon"' in drawer and 'data-md-component="source"' not in drawer
+    assert drawer.count('class="mx-drawer__link"') == len(others)
+
+
+def test_every_header_piece_is_marked_for_the_viewport_check(site):
+    """tools/check_header.py checks the [data-mx-item] pieces at every width; a piece without one goes unchecked."""
+    html = (site["folder"] / "guides/input-sources/index.html").read_text(encoding="utf-8")
+    header = html.split("<header", 1)[1].split("</header>", 1)[0]
+    for item in ("menu", "logo", "docs", "version", "search", "search-icon", "github", "python", "discord", "x-twitter",
+                 "rule", "theme"):
+        assert f'data-mx-item="{item}"' in header, item
+
+
+def test_search_shows_the_shortcut_for_the_platform():
+    css = (ROOT / "docs/assets/css/machyon.css").read_text(encoding="utf-8")
+    assert 'content: "Ctrl K"' in css and '[data-platform^="Mac"] .mx-topbar .md-search__button::after { content: "⌘ K"; }' in css
