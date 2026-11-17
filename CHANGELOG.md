@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-17
+
+**Fixed**
+
+- `test_insecure_and_os_trust_store_both_work` failed on macOS with Python 3.15: "Missing Authority Key Identifier". Python 3.13 and newer verify certificates strictly by default, and a certificate without an Authority Key Identifier is rejected. The test's certificate got one only because OpenSSL 3's command-line tool adds it by default; LibreSSL, the openssl that ships with macOS, doesn't. The test now asks for both key identifiers explicitly and checks that the certificate has them. The library is unchanged.
+
 ## 1.2.1 (2026-11-14)
 
 **Added**

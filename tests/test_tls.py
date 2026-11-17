@@ -16,18 +16,27 @@ pytestmark = pytest.mark.skipif(shutil.which("openssl") is None, reason="needs t
 
 @pytest.fixture(scope="module")
 def private_ca(tmp_path_factory):
-    """A CA nobody trusts + a localhost certificate it signed (like antivirus HTTPS scanning)."""
+    """A CA nobody trusts + a localhost certificate it signed (like antivirus HTTPS scanning).
+
+    The key identifiers are asked for explicitly. Python 3.13+ verifies strictly by default and rejects a certificate
+    without an Authority Key Identifier ("Missing Authority Key Identifier"). OpenSSL 3's command-line tool adds one on
+    its own, but not every openssl on a CI runner does (LibreSSL, macOS's built-in openssl, doesn't), so relying on
+    the default made the test depend on which openssl came first on the PATH.
+    """
     d = tmp_path_factory.mktemp("ca")
-    run = lambda *a: subprocess.run(a, cwd=d, check=True, capture_output=True)  # noqa: E731
+    run = lambda *a: subprocess.run(a, cwd=d, check=True, capture_output=True, text=True)  # noqa: E731
     run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "ca.key", "-out", "ca.pem",
         "-days", "2", "-subj", "/CN=Machyon Test CA", "-addext", "basicConstraints=critical,CA:TRUE",
-        "-addext", "keyUsage=critical,keyCertSign,cRLSign")
+        "-addext", "keyUsage=critical,keyCertSign,cRLSign", "-addext", "subjectKeyIdentifier=hash")
     run("openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout", "leaf.key", "-out", "leaf.csr",
         "-subj", "/CN=localhost")
     (d / "ext.cnf").write_text("subjectAltName=DNS:localhost\nbasicConstraints=CA:FALSE\n"
-                               "keyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n")
+                               "keyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n"
+                               "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n")
     run("openssl", "x509", "-req", "-in", "leaf.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial",
         "-out", "leaf.pem", "-days", "2", "-extfile", "ext.cnf")
+    text = run("openssl", "x509", "-in", "leaf.pem", "-noout", "-text").stdout
+    assert "Authority Key Identifier" in text and "Subject Key Identifier" in text   # what strict verifiers need
     return d
 
 
