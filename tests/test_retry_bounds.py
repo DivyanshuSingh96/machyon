@@ -159,3 +159,108 @@ def test_429_pauses_only_its_host_for_retry_after(srv, tmp_path):
         assert times[path(u)][-1] - first_429 >= 0.95                              # nothing before Retry-After
     during = [t for u in other for t in times[path(u)] if first_429 < t < first_429 + 0.95]
     assert during                                                                  # the other host kept going
+
+
+# ------------------------------------------------------------------------------------------------ resume: what is left
+
+def test_retry_permanent_false_carries_earlier_permanent_failures_without_a_request(srv, tmp_path):
+    good = [srv.url("ok", i) for i in range(90)]
+    e404 = [srv.url("e404", i) for i in range(3)]
+    html = [srv.url("html", i) for i in range(3)]
+    e500 = [srv.url("e500", i) for i in range(4)]
+    urls = good + e404 + html + e500
+    out = tmp_path / "o"
+    first = run(urls, out, max_retries=2)
+    assert (first.downloaded, first.failed, first.carried) == (90, 10, 0)
+    for n in (2, 3):                                        # two resumes
+        r = run(urls, out, max_retries=2, retry_permanent=False)
+        assert r.total == 100 and (r.skipped, r.failed, r.carried, r.downloaded) == (90, 10, 6, 0)
+        assert r.failure_reasons == {"http_404": 3, "not_image": 3, "http_500": 4}
+        assert requests_for(srv, e404 + html) == [1] * 6    # never requested again
+        assert requests_for(srv, e500) == [n * 6] * 4       # a new bounded budget per call: 2 rounds of 1 + 2
+        assert requests_for(srv, good) == [1] * 90
+
+
+def test_the_ledger_records_every_rows_attempts_across_calls(srv, tmp_path):
+    e404 = [srv.url("e404", 0)]
+    e500 = [srv.url("e500", 0)]
+    out = tmp_path / "o"
+
+    def attempts():
+        import json
+        rows = [json.loads(x) for x in (out / "failed_downloads.jsonl").read_text().splitlines()]
+        return {r["reason"]: r["attempts"] for r in rows}
+    run(e404 + e500, out, max_retries=5)
+    assert attempts() == {"http_404": 1, "http_500": 12} and requests_for(srv, e404 + e500) == [1, 12]
+    run(e404 + e500, out, max_retries=5)                     # a re-run asks again, and the totals say so
+    assert attempts() == {"http_404": 2, "http_500": 24} and requests_for(srv, e404 + e500) == [2, 24]
+    run(e404 + e500, out, max_retries=5, retry_permanent=False)
+    assert attempts() == {"http_404": 2, "http_500": 36} and requests_for(srv, e404 + e500) == [2, 36]
+    run([srv.url("ok", 0)], out)                             # another row succeeding leaves these records alone
+    assert attempts() == {"http_404": 2, "http_500": 36}
+
+
+def test_progress_says_how_many_links_are_waiting_to_retry(srv, tmp_path):
+    bad = [srv.url("e500", i) for i in range(4)]
+    snaps = []
+    r = run([srv.url("ok", i) for i in range(20)] + bad, tmp_path / "o", max_retries=3, backoff=0.2,
+            on_progress=snaps.append)
+    assert max(s.retrying for s in snaps) == 4                # the four failing links, not the retry events
+    assert snaps[-1].done and snaps[-1].retrying == 0 and snaps[-1].failed == 4
+    assert snaps[-1].retries == r.retries == 4 * 2 * 3 and sum(requests_for(srv, bad)) == 4 * 2 * 4
+
+
+# ------------------------------------------------------------------------------------------------ machyon ui
+
+def test_ui_stop_and_repeated_resume_is_bounded_and_carries_permanent_failures(srv, tmp_path):
+    from uiserver import UIServer
+    ui = UIServer(tmp_path / "runs")
+    try:
+        good = [srv.url("ok", i) for i in range(90)]
+        e404 = [srv.url("e404", i) for i in range(3)]
+        html = [srv.url("html", i) for i in range(3)]
+        e500 = [srv.url("e500", i) for i in range(4)]
+        sid = ui.paste("\n".join(good + e404 + html + e500) + "\n")[1]["source"]
+        settings = {"warm_start": False, "timeout": 1.0, "max_retries": 3}   # what the UI allows; default backoff
+        rid = ui.post("/api/runs", {"source": sid, "names": "{hash}{ext}", "settings": settings})[1]["run"]
+
+        def stop_during_retries():
+            end = time.time() + 30
+            while time.time() < end:
+                p = (ui.get("/api/job")[1]["job"] or {}).get("progress")
+                if p and p["retrying"] and p["retries"] >= 4:
+                    ui.post("/api/job/stop")
+                    break
+                time.sleep(0.05)
+            job = ui.wait_job()
+            p = job["progress"]
+            assert job["state"] == "cancelled" and p["done"] and p["retrying"] == 0   # stopped: nothing left waiting
+            return job
+
+        stop_during_retries()
+        assert ui.store.load(rid)["status"] == "cancelled"
+        assert requests_for(srv, good) == [1] * 90 and requests_for(srv, e404 + html) == [1] * 6
+        before = requests_for(srv, e500)
+        for _ in range(2):                                     # Resume, stop again during retries
+            assert ui.post(f"/api/runs/{rid}/resume", {})[0] == 202
+            stop_during_retries()
+            now = requests_for(srv, e500)
+            assert all(0 < b - a <= 2 * 4 for a, b in zip(before, now, strict=True))   # bounded each session
+            before = now
+        assert ui.post(f"/api/runs/{rid}/resume", {})[0] == 202                       # and once to the end
+        job = ui.wait_job(120)
+        assert job["state"] == "completed"
+        assert requests_for(srv, good) == [1] * 90                                      # never again
+        assert requests_for(srv, e404 + html) == [1] * 6                                # carried, never re-requested
+        assert all(b - a == 2 * 4 for a, b in zip(before, requests_for(srv, e500), strict=True))
+        rep = ui.get(f"/api/runs/{rid}")[1]["run"]["report"]
+        assert rep["total"] == 100 and rep["skipped"] + rep["downloaded"] + rep["failed"] == 100
+        assert (rep["skipped"], rep["failed"], rep["carried"]) == (90, 10, 6)
+        assert rep["retries"] == job["progress"]["retries"] == 4 * 2 * 3                # the UI and the report agree
+        rows = ui.get(f"/api/runs/{rid}/files")[1]["failures"]["rows"]
+        attempts = {r["url"]: r["attempts"] for r in rows}
+        assert [attempts[u] for u in e404 + html] == [1] * 6
+        assert [attempts[u] for u in e500] == requests_for(srv, e500)        # each row: every session's requests
+        assert [h["kind"] for h in ui.store.load(rid)["history"]] == ["download", "resume", "resume", "resume"]
+    finally:
+        ui.close()

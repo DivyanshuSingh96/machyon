@@ -14,7 +14,7 @@ from .disk import write_atomic_sync
 
 logger = logging.getLogger("machyon.metrics")
 
-COUNTERS = ("downloaded", "failed", "skipped", "bytes", "retries", "throttled", "deduplicated", "hedged")
+COUNTERS = ("downloaded", "failed", "skipped", "bytes", "retries", "throttled", "deduplicated", "hedged", "carried")
 
 # classic metric names -> Report fields
 _LEGACY = {"successful_downloads": "downloaded", "failed_downloads": "failed", "cache_hits": "skipped",
@@ -31,10 +31,11 @@ class Report:
     failed: int = 0                #: rows that ended failed in this call
     bytes: int = 0
     duration: float = 0.0
-    retries: int = 0
+    retries: int = 0               #: retry attempts, across all rows and both rounds (the pass and the final sweep)
     throttled: int = 0             #: HTTP 429 responses
     deduplicated: int = 0          #: rows served by a URL fetched for another row
     hedged: int = 0                #: duplicate requests raced against stragglers
+    carried: int = 0               #: rows that failed permanently earlier and were not requested again (in ``failed``)
     peak_concurrency: int = 0
     final_concurrency: int = 0
     latency_p50: float = 0.0

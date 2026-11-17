@@ -705,7 +705,7 @@ async function newDownload() {
         sw("hedge", "Hedging", "Races a second request against a straggler."),
         num("concurrency", "Starting concurrency", "Requests at once to begin with."),
         num("max_concurrency", "Maximum concurrency", "The most it will ever try."),
-        num("max_retries", "Retries per image", "After the first attempt.")),
+        num("max_retries", "Retries per image", "After the first attempt, in each of the two rounds.")),
       h("details", { class: "adv" }, h("summary", { text: "Advanced" }),
         h("div", { class: "settings" },
           num("timeout", "Timeout (s)", "Connecting, or a read that stalls.", 0.5),
@@ -768,7 +768,8 @@ async function runPage(id) {
 async function resume(r, btn) {
   const ok = await ask({ title: "Resume this run?", ok: "Resume",
     text: "Machyon downloads the rest with the same manifest, file names and settings, into the same folder. " +
-          "Files already on disk are kept and skipped." });
+          "Files already on disk are kept and skipped. Rows that failed permanently (a 404, a page that isn't an " +
+          "image) keep their outcome and aren't requested again: use Retry failures for those." });
   if (!ok || btn.disabled) return;
   btn.disabled = true;
   try { await api(`/api/runs/${r.id}/resume`, { method: "POST", json: {} }); say("Resumed"); route(); }
@@ -856,7 +857,10 @@ function liveCard(id, job) {
     const p = job.progress;
     if (!p) { phase.textContent = "Reading the manifest…"; big.replaceChildren("0"); meter.classList.add("unknown"); meter.replaceChildren(h("i")); return; }
     const done = p.downloaded + p.skipped + p.failed;
-    const ph = job.stopping ? "Stopping: finishing the files in flight…" : p.phase === "retry" ? "Retrying the failures once more" : "Downloading";
+    const waiting = int(p.retrying || 0);
+    const ph = job.stopping ? "Stopping: finishing the files in flight…"
+      : p.phase === "retry" ? `Final sweep: one last automatic round for the links that failed${waiting ? ` · ${plural(p.retrying, "link")} waiting to retry` : ""}`
+      : `Downloading${waiting ? ` · ${plural(p.retrying, "link")} waiting to retry` : ""}`;
     phase.textContent = ph;
     if (ph !== lastPhase) { say(ph); lastPhase = ph; }
     big.replaceChildren(int(done), p.total !== null ? h("small", { text: ` / ${int(p.total)} rows` }) : h("small", { text: " rows so far · total unknown" }));
@@ -889,7 +893,8 @@ function liveCard(id, job) {
       stat("Downloaded", int(p.downloaded), "ok"), stat("Already on disk", int(p.skipped)), stat("Failed", int(p.failed), p.failed ? "bad" : ""),
       stat("Data", bytes(p.bytes)), stat("Elapsed", duration(p.elapsed)), stat("Average speed", speed.toFixed(1), "", "img/s"),
       stat("Concurrency limit", int(p.concurrency)), stat("In flight", int(p.in_flight)),
-      stat("Retries", int(p.retries)), stat("Throttled", int(p.throttled)), stat("Hedged", int(p.hedged)));
+      stat("Waiting to retry", int(p.retrying || 0)), stat("Retry attempts", int(p.retries)),
+      stat("Throttled", int(p.throttled)), stat("Hedged", int(p.hedged)));
     stopBtn.disabled = !!job.stopping;
   }
 
@@ -925,7 +930,8 @@ function reportCard(rep, history) {
     h("div", { class: "big-count" }, int(rep.downloaded + rep.skipped), h("small", { text: ` of ${int(rep.total)} rows are on disk` })),
     h("div", { class: "stats" },
       stat("Rows", int(rep.total)), stat("Downloaded", int(rep.downloaded), "ok"), stat("Already on disk", int(rep.skipped)),
-      stat("Failed", int(rep.failed), rep.failed ? "bad" : ""), stat("Retries", int(rep.retries)), stat("Throttled", int(rep.throttled)),
+      stat("Failed", int(rep.failed), rep.failed ? "bad" : ""), stat("Retry attempts", int(rep.retries)), stat("Throttled", int(rep.throttled)),
+      rep.carried ? stat("Not requested again", int(rep.carried)) : null,
       stat("Hedged", int(rep.hedged)), stat("Duration", duration(rep.duration)), stat("Throughput", rate.toFixed(1), "", "img/s"),
       stat("Data", bytes(rep.bytes))),
     reasons.length ? h("div", { class: "stack" }, h("h3", { text: "Why rows failed" }),
@@ -954,7 +960,7 @@ function stoppedCard(r, files) {
     : "This download didn't finish: Machyon UI stopped while it ran. Every file on disk is complete.";
   return h("section", { class: "card" }, h("h2", { text: r.status === "error" ? "The download stopped" : "Not finished yet" }),
     h("div", { class: `note ${r.status === "error" ? "bad" : "warn"}` }, icon("warn"), h("div", null, msg,
-      " Resume to download the rest: files already on disk are skipped.")),
+      " Resume to download the rest: files already on disk are skipped, and rows that failed permanently keep their outcome.")),
     h("h3", { text: "On disk now" }),
     h("div", { class: "stats" },
       stat("Images in the folder", files && files.on_disk !== null ? int(files.on_disk) : "–", "ok"),
@@ -1043,7 +1049,8 @@ function failuresCard(r, f, busy, settings) {
         h("td", null, h("code", { text: x.reason }), " ", h("span", { class: `tag ${KIND[x.kind][1]}`, text: KIND[x.kind][0] })),
         h("td", { class: "mono", text: x.names.join(", "), title: x.names.join(", ") }),
         h("td", { text: x.url, title: x.url }),
-        h("td", { text: x.hint || x.error || "", title: [x.error, x.hint].filter(Boolean).join(" · ") })))))),
+        h("td", { text: (x.hint || x.error || "") + (x.attempts ? ` (${plural(x.attempts, "attempt")} so far)` : ""),
+          title: [x.error, x.hint, x.attempts && `${plural(x.attempts, "request")} sent for this row so far`].filter(Boolean).join(" · ") })))))),
     f.total > f.rows.length && h("p", { class: "faint", text: `Showing ${int(f.rows.length)} of ${int(f.total)}; the rest are in the ledger file.` }),
     h("p", { class: "faint", text: "Links are shown without passwords or query values, which can hold secrets." }));
 }

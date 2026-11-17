@@ -38,13 +38,24 @@ They do different things, and both are safe to repeat.
 | | Run the same command again | `machyon retry` / `retry_failed()` |
 |---|---|---|
 | Needs the source file | Yes | No: reads `failed_downloads.jsonl` |
-| Which rows | Every row without a finished file, including ones that failed permanently last time | Recorded failures only; transient ones unless you pass `--all` / `include_permanent=True` |
+| Which rows | Every row without a finished file, including ones that failed permanently last time (unless `retry_permanent=False`) | Recorded failures only; transient ones unless you pass `--all` / `include_permanent=True` |
 | Filenames | From the template | The names recorded in the ledger |
 | Use it when | A run was interrupted, or the source list changed | A run finished with transient failures (an outage, a rate limit) |
 
 ```python title="retry.py"
 --8<-- "retry.py"
 ```
+
+To resume without asking again for rows that already failed permanently, pass `retry_permanent=False`. Rows the
+ledger records as a 404, not an image or another permanent reason, for the same URL, keep that outcome and are
+counted in `Report.failed` (and `Report.carried`) without a request. This is what **Resume** in `machyon ui` does:
+
+```python
+machyon.download("urls.csv", "images/", retry_permanent=False)   # only what can still change
+```
+
+Each call has its own [retry budget](retries-and-rate-limits.md#how-many-attempts-a-url-gets): repeating a run
+never makes any single call retry more, and `attempts` in the ledger shows each row's total so far.
 
 ## After Ctrl+C, a crash or a full disk
 

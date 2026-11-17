@@ -86,7 +86,13 @@ or one another `machyon ui` is using is refused with the reason.
   **Referer**: retrying with a new one retries those rows too, and the run keeps it for later retries and resumes.
 - **An interrupted run**, one that was stopped or was running when `machyon ui` stopped, shows what is on disk
   now. **Resume** continues it with the same manifest, names, settings and folder: files already there are
-  kept and skipped. The names can't be changed on resume, because that would change which file each row means.
+  kept and skipped, and rows that already failed permanently keep their outcome without being asked for again
+  (**Retry failures** is how you ask again). Everything else gets a new, [bounded set of
+  retries](../reliability/retries-and-rate-limits.md#how-many-attempts-a-url-gets). The names can't be changed on
+  resume, because that would change which file each row means.
+- **While it runs**, **Waiting to retry** is how many links failed for now and will be tried again;
+  **Retry attempts** counts every retry across all links and both rounds, so it grows faster than the number of
+  links. When a link uses up its retries it moves to **Failed**.
 - **Delete** removes the run's folder after you confirm, and only that folder.
 
 ## Options

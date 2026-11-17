@@ -29,7 +29,10 @@ class ProgressSnapshot:
     downloaded / skipped: rows whose file was downloaded / was already complete on disk.
     failed: rows that failed during this call and are still failed (a row that fails and then succeeds on a retry
         is not counted). Its final value equals ``Report.failed``.
-    retries / throttled / hedged: attempts retried, 429 or 503 answers, duplicate requests raced against a straggler.
+    retries / throttled / hedged: retry attempts (across all rows and both rounds, so it can be far larger than the
+        number of rows), 429 or 503 answers, duplicate requests raced against a straggler.
+    retrying: rows that failed transiently and are waiting for, or making, another automatic attempt right now. It
+        returns to 0 as each one succeeds or uses up its allowance (then it is in ``failed``).
     bytes: bytes of image data written.
     in_flight: HTTP attempts running right now.
     concurrency: the current concurrency limit: how many attempts Machyon allows at once, not how many are running.
@@ -53,6 +56,7 @@ class ProgressSnapshot:
     concurrency: int
     elapsed: float
     phase: str
+    retrying: int = 0
     done: bool = False
     outcome: str | None = None
 
@@ -91,7 +95,8 @@ class _Observer:
             retries=c["retries"] - b["retries"], throttled=c["throttled"] - b["throttled"],
             hedged=c["hedged"] - b["hedged"], bytes=c["bytes"] - b["bytes"],
             in_flight=dl.limiter.in_use, concurrency=dl.limiter.limit,
-            elapsed=time.monotonic() - self.t0, phase=self.phase, done=done, outcome=outcome)
+            elapsed=time.monotonic() - self.t0, phase=self.phase, retrying=dl.engine.retrying, done=done,
+            outcome=outcome)
 
     def emit(self, done: bool = False, outcome: str | None = None) -> None:
         try:

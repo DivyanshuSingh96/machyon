@@ -364,7 +364,8 @@ def failures_of(images: Path) -> dict:
         reasons[reason] = reasons.get(reason, 0) + n
         if len(rows) < FAILURES_MAX:
             rows.append({"url": redact_url(str(e.get("url", ""))), "names": e.get("names") or [], "reason": reason,
-                         "kind": kind, "error": redact_text(e.get("error")), "hint": UI_HINTS.get(reason) or hint(reason)})
+                         "kind": kind, "error": redact_text(e.get("error")), "hint": UI_HINTS.get(reason) or hint(reason),
+                         "attempts": e.get("attempts") if isinstance(e.get("attempts"), int) else None})
     return {"rows": rows, "total": sum(counts.values()), "reasons": reasons, **counts}
 
 

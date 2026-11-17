@@ -18,6 +18,28 @@ asked you to slow down.</p>
 
 Every reason is listed with its meaning in the [failure reasons reference](../reference/failure-reasons.md).
 
+## How many attempts a URL gets
+
+Every limit is per URL and per call (`download()`, a re-run, a Resume in `machyon ui`, `retry_failed()`):
+
+| Failure | Requests in one call |
+|---|---|
+| Permanent (404, not an image…) | 1 |
+| Transient, every time | `1 + max_retries` in the pass, then as many again in the final sweep: 12 with the default `max_retries = 5`, or 6 with `retry_failures=False` |
+| Transient, then fine | Until the first good answer, within those limits |
+
+Nothing retries on its own after a call ends. Running it again (or pressing Resume) is a new call with its own
+budget, and finished files are never downloaded again. When a dropped connection was one Machyon had reused,
+aiohttp sends the request once more by itself, so a `connection` failure can cost up to two requests per attempt.
+
+`failed_downloads.jsonl` records, for each failed row, the requests sent for it so far (`attempts`), added up across
+calls until the row succeeds. A row whose total keeps growing is being asked for on every re-run.
+
+**The counters.** `retries` (in the report, the progress snapshot and the CLI's progress line) counts retry
+*attempts* across all rows and both rounds, so it can be much larger than the number of rows still failing: four
+links that fail every time make 40 retries with the defaults. How many links are actually waiting for another
+attempt is `ProgressSnapshot.retrying`, shown in `machyon ui` as **Waiting to retry**.
+
 ## The backoff schedule
 
 After a transient failure, the row goes back in the queue with a delay. It doesn't hold a concurrency slot while
@@ -39,8 +61,9 @@ the same instant. A large download that dropped mid-body retries within 0.5 s, b
 stopped rather than starting over.
 
 **The final sweep.** When the pass ends, rows that failed transiently get one more chance: Machyon waits a few
-seconds, then runs them again with a fresh set of retries. Many outages clear in that time. Turn it off with
-`retry_failures=False` (on `download()` and `Downloader.download()`).
+seconds, then runs them again with a fresh set of retries. Many outages clear in that time. It runs once per call
+and never includes permanent failures. Turn it off with `retry_failures=False` (on `download()` and
+`Downloader.download()`).
 
 ## Rate limits (HTTP 429)
 
