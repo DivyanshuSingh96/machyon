@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.3 (2026-11-17)
+
+**Fixed**
+
+- After a Resume, `Report.failure_examples` had no `url` or `error` for a reason whose rows were all carried over from an earlier session, because the example came only from requests made in this session. Those reasons now take their example from `failed_downloads.jsonl`: the lowest URL with that reason, and the error recorded for that same entry, so the same rows always give the same example. Counts are unchanged.
+- A URL that never answered could get far more than three duplicate requests. The limit of three counted the duplicates of one attempt, so every retry and the final sweep started again from zero: a URL that never answered got two duplicates on every attempt, 12 in one call with `max_retries=2`, and more on every Resume. The three now cover the row's whole life, across retries, the final sweep, Retry and Resume, and `failed_downloads.jsonl` keeps how many it has used. A new save folder starts from zero. The per-round hedging budget and the hedging delay are unchanged.
+
+**Added**
+
+- Hints for `http_400` (the URL or its parameters were rejected), `http_401` (a login or credentials are needed) and `http_410` (removed for good), and a general one for any other 4xx such as `http_418`. They appear in the report, the CLI's failure summary and `machyon ui`. `http_408` and `http_425` say they were retried. Nothing about which statuses are retried has changed.
+- `failed_downloads.jsonl` records `hedges` for a failed row: how many of its requests were duplicates.
+
+**Changed**
+
+- Example URLs in the report, and URLs in failure log lines, never show a `user:password`, and query values that look like secrets (tokens, signatures, keys) appear as `…`. Other query values are kept, so the URL still says which image it was. `machyon ui` still hides every query value.
+
+**Documentation**
+
+- The failure reasons reference has entries for `http_400`, `http_401`, `http_410` and other 4xx statuses, each with its hint. Retries and rate limits explains that the three duplicates are per row for its whole life, and the failure ledger documents `hedges` and where carried-over examples come from.
+
+**Tests**
+
+- `tests/test_reports_hints_hedging.py`: examples for fresh, carried, mixed and old-format ledger rows, redaction, a hint for every 4xx in the report, the CLI and `machyon ui`, and the duplicate limit for a URL that never answers (18 requests on 1.2.2, 9 now with `max_retries=2`), slow and quick URLs, many slow URLs, the last slot of the shared budget, Stop and Resume while hedging, and a new save folder.
+
 ## 1.2.2 (2026-11-17)
 
 **Fixed**
