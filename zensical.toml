@@ -133,7 +133,7 @@ film = "assets/film/the-arrival-of-opa.mp4"
 # The Discord server's invite code: the part after discord.gg/ of an invite set to never expire, with no limit on
 # uses. Empty until the server opens: the header and footer then link to /discord/, which says it is opening soon.
 # Once set, they link to the invite, and /discord/ sends anyone who opens it (from the README, a post) there too.
-discord_invite = ""
+discord_invite = "XbmsXRdZ9W"
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
