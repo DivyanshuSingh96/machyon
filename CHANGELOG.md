@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-21: Machyon Community on Discord
+
+**Changed**
+
+- The Machyon Community on Discord is open. The Discord links in the header, the footer and the navigation drawer now go straight to the server, and `/discord/` forwards there.
+
 ## 2026-11-17: documentation header
 
 **Changed**

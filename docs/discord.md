@@ -2,7 +2,7 @@
 template: discord.html
 title: Machyon on Discord
 seo_title: "Machyon on Discord: the Machyon Community"
-description: The Machyon Community on Discord, for questions, run reports and ideas about Machyon. It is opening soon; until then, here is where to ask.
+description: Join the Machyon Community on Discord, for questions, run reports and ideas about Machyon.
 hide:
   - navigation
   - toc
