@@ -157,6 +157,27 @@ def test_descriptions_are_unique_and_a_sensible_length(site):
         seen[d] = rel
 
 
+SEARCH_TAGS = {"Beginner", "machyon ui", "CLI", "Python API", "Configuration", "Errors & retries", "Speed", "Project"}
+
+
+def test_every_page_has_search_tags_from_the_set(site):
+    """The search's Filters panel lists the tags pages carry; with none it opened empty. A short, fixed set keeps
+    it useful: a typo would add a tag that matches one page."""
+    import yaml  # comes with zensical, which builds the site these tests read
+    seen = set()
+    for md in sorted((ROOT / "docs").rglob("*.md")):
+        text = md.read_text(encoding="utf-8")
+        tags = yaml.safe_load(text.split("---\n", 2)[1]).get("tags") if text.startswith("---\n") else None
+        rel = md.relative_to(ROOT / "docs")
+        assert tags and isinstance(tags, list), f"{rel}: no tags in the front matter"
+        assert set(tags) <= SEARCH_TAGS, f"{rel}: {set(tags) - SEARCH_TAGS} not in SEARCH_TAGS"
+        seen |= set(tags)
+    assert seen == SEARCH_TAGS, f"unused: {SEARCH_TAGS - seen}"
+    index = json.loads((site["folder"] / "search.json").read_text(encoding="utf-8"))
+    items = index["items"] if isinstance(index, dict) else index
+    assert {t for i in items for t in i.get("tags") or []} == SEARCH_TAGS
+
+
 def test_search_console_verification_tag(site):
     html = (site["folder"] / "index.html").read_text(encoding="utf-8")
     assert html.count(VERIFICATION) == 1

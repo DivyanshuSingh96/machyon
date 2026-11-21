@@ -90,3 +90,39 @@
   else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", onPage);
   else onPage();
 })();
+
+/* The count on the search's Filters button.
+
+   The theme draws the search in a shadow root and colours that count white on the accent colour. The dark scheme's
+   accent is nearly white, so the number disappeared there. The count now takes the page's background colour: dark
+   on the light badge in the dark scheme, light on the dark badge in the light one. Page CSS can't reach into the
+   shadow root, so the rule is added to it once it exists; if the theme's markup changes, it just matches nothing. */
+(() => {
+  "use strict";
+  const CSS = 'button[aria-label="Filters"] > span[aria-hidden="true"] { color: var(--md-default-bg-color, #fff); }';
+  const done = new WeakSet();
+
+  function patch(el) {
+    const root = el.shadowRoot;
+    if (!root || done.has(root)) return;
+    done.add(root);
+    if ("adoptedStyleSheets" in root && typeof CSSStyleSheet === "function" && "replaceSync" in CSSStyleSheet.prototype) {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(CSS);
+      root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+    } else {
+      const style = document.createElement("style");
+      style.textContent = CSS;
+      root.append(style);
+    }
+  }
+
+  const scan = () => { for (const el of document.body.children) patch(el); };
+  // The search is added straight to <body>, so only <body>'s own children are watched.
+  const start = () => {
+    scan();
+    new MutationObserver(() => requestAnimationFrame(scan)).observe(document.body, { childList: true });
+  };
+  if (document.body) start();
+  else document.addEventListener("DOMContentLoaded", start);
+})();

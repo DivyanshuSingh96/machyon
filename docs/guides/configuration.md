@@ -1,4 +1,5 @@
 ---
+tags: [Configuration, Python API, CLI]
 description: The handful of settings worth knowing - headers and referers, concurrency caps, timeouts, TLS trust, file safety - and the ways to set them.
 ---
 

@@ -1,4 +1,5 @@
 ---
+tags: [Beginner]
 template: home.html
 title: Machyon
 seo_title: "Machyon: Fast Async Image Downloader for Python"

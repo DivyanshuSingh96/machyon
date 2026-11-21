@@ -1,4 +1,5 @@
 ---
+tags: [Python API]
 description: Every public name in the machyon package, generated from the source and its docstrings.
 ---
 

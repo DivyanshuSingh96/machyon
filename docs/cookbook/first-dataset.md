@@ -1,4 +1,5 @@
 ---
+tags: [Beginner, Python API]
 seo_title: "Build an image dataset from a CSV with Python · Machyon"
 description: "A beginner project: download a small image dataset from a CSV with one Machyon call, sort it into category folders, and read the report."
 ---

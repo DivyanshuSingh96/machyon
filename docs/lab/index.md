@@ -1,4 +1,5 @@
 ---
+tags: [Speed]
 description: Interactive experiments that show what Machyon does, replayed from real runs of the library.
 ---
 

@@ -1,4 +1,5 @@
 ---
+tags: [Configuration]
 seo_title: "Download images from CSV, JSONL or Parquet · Machyon"
 description: Every input Machyon reads - CSV, TSV, TXT, JSON, JSONL, Parquet, DataFrames and Python iterables - and how it finds the URL column.
 ---

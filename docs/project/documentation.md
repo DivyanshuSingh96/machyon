@@ -1,4 +1,5 @@
 ---
+tags: [Project]
 description: How this documentation is built, what is generated from the source, how examples are tested, and how to contribute a page.
 ---
 

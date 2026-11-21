@@ -1,4 +1,5 @@
 ---
+tags: [Beginner]
 description: Small, complete projects built with Machyon that you can run, read and change.
 ---
 

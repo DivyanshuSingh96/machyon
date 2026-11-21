@@ -1,4 +1,5 @@
 ---
+tags: [Configuration]
 description: Name downloaded files with templates built from the URL, the row number and your own columns, with callables or with explicit lists.
 ---
 

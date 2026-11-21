@@ -1,4 +1,5 @@
 ---
+tags: [CLI]
 description: The machyon command line, its five commands and every flag, captured from the real --help output.
 ---
 

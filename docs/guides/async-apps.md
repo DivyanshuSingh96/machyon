@@ -1,4 +1,5 @@
 ---
+tags: [Python API]
 description: Use Machyon inside asyncio programs, Jupyter notebooks and web servers, run downloads side by side, and integrate with your own event loop.
 ---
 

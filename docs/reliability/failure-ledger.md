@@ -1,4 +1,5 @@
 ---
+tags: ["Errors & retries"]
 description: The format of failed_downloads.jsonl, how it is merged across runs and processes, and how to read it from Python or the shell.
 ---
 

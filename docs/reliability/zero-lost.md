@@ -1,4 +1,5 @@
 ---
+tags: ["Errors & retries"]
 description: Machyon's core guarantee, stated precisely - every row is written, skipped or recorded with a reason - with its exact boundaries and how it is tested.
 ---
 

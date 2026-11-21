@@ -1,4 +1,5 @@
 ---
+tags: [Speed]
 seo_title: "Adaptive concurrency for bulk downloads · Machyon"
 description: "How Machyon chooses how many requests to send at once, and keeps adjusting it: slow start, probing, backing off on errors and 429s. With a simulator."
 ---

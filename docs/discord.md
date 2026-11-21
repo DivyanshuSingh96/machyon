@@ -1,4 +1,5 @@
 ---
+tags: [Project]
 template: discord.html
 title: Machyon on Discord
 seo_title: "Machyon on Discord: the Machyon Community"
