@@ -1099,12 +1099,30 @@ class Interrupts:
         self._exit(130)
 
 
+def _ctrl_c_through_the_loop(interrupts: Interrupts) -> None:
+    """Hand Ctrl+C to the event loop while it serves (macOS and Linux).
+
+    The operating system may deliver Ctrl+C to any thread of the process, and macOS often picks the download
+    thread. Python runs a ``signal.signal`` handler only once the main thread wakes up, and an idle server's loop
+    can sleep indefinitely, so Ctrl+C was ignored until something else woke it, and a second press waited up to
+    WAIT_NOTICE_S. ``add_signal_handler`` wakes the loop through its wakeup file whichever thread gets the signal.
+    asyncio removes the handler when the loop closes. Windows delivers Ctrl+C on its own thread and keeps the
+    ``signal.signal`` handler that ``serve`` installed."""
+    if signal.getsignal(signal.SIGINT) is not interrupts:   # only where serve() installed it, on the main thread
+        return
+    try:
+        interrupts.loop.add_signal_handler(signal.SIGINT, interrupts)
+    except (NotImplementedError, RuntimeError):            # Windows' Proactor loop has no signal handlers
+        pass
+
+
 async def _run(app: web.Application, sock: socket.socket, url: str, open_browser: bool,
                interrupts: Interrupts | None = None) -> None:
     ui = app[UI_KEY]
     stop = asyncio.Event()
     if interrupts is not None:
         interrupts.loop, interrupts.stop = asyncio.get_running_loop(), stop
+        _ctrl_c_through_the_loop(interrupts)
     runner = web.AppRunner(app, access_log=None, handle_signals=False, shutdown_timeout=1)
     await runner.setup()
     await web.SockSite(runner, sock).start()

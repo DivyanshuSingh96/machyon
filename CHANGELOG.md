@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.4 (2026-11-21)
+
+**Fixed**
+
+- `machyon ui` could ignore Ctrl+C, mostly on macOS. The operating system can hand Ctrl+C to any thread of the
+  process, and macOS often picks the download thread. Python then ran the handler only when the server's main
+  thread next woke up, so an idle UI kept running until something else reached it, such as the open page asking
+  for an update. A second Ctrl+C while a download was stopping took up to 10 seconds instead of quitting at once.
+  On macOS and Linux, Ctrl+C now wakes the server straight away whichever thread receives it. Windows keeps its
+  own handling.
+- A test that checked the log a moment before the warning was written, and could fail on a busy Windows runner.
+
 ## 2026-11-21: Release notes on Discord
 
 **Added**
