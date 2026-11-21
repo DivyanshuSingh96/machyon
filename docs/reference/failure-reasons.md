@@ -1,4 +1,5 @@
 ---
+tags: ["Errors & retries"]
 description: Every reason Machyon can record for a failed row, whether a retry can fix it, and what to do about it.
 ---
 

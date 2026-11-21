@@ -1,4 +1,5 @@
 ---
+tags: [Configuration, Python API, CLI]
 description: Every DownloadConfig option with its default, its CLI flag and what it does. Generated from the source.
 ---
 

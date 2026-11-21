@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-21: Search filters
+
+**Fixed**
+
+- The Filters panel in the documentation search opened empty: it lists the tags pages carry, and no page had any.
+  Every page now has one or more of eight tags (Beginner, machyon ui, CLI, Python API, Configuration,
+  Errors & retries, Speed, Project), so a search can be narrowed to, say, the error and retry pages. A test keeps
+  every new page tagged from that set.
+- The count on the Filters button was white on a nearly white badge in the dark scheme. It now uses the page's
+  background colour in both schemes.
+
 ## 1.2.3.post1 (2026-11-21)
 
 The same code as 1.2.3, released again so the project page on PyPI shows the current README. A PyPI release's

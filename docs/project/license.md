@@ -1,4 +1,5 @@
 ---
+tags: [Project]
 description: Machyon is MIT-licensed. How to cite it in research, and the licences of the fonts and tools used by this site.
 ---
 

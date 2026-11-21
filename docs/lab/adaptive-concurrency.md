@@ -1,4 +1,5 @@
 ---
+tags: [Speed]
 hide:
   - toc
 seo_title: "Adaptive concurrency lab: a real run, replayed · Machyon"

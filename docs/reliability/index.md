@@ -1,4 +1,5 @@
 ---
+tags: ["Errors & retries"]
 description: How Machyon keeps track of every row, from planning to the file on disk, and where each guarantee stops.
 ---
 

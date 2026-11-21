@@ -1,4 +1,5 @@
 ---
+tags: [Speed, CLI]
 description: Download millions of images - memory use, splitting work across processes or machines, folder layout, and keeping a history of runs.
 ---
 

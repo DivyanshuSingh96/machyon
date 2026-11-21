@@ -1,4 +1,5 @@
 ---
+tags: [Beginner, machyon ui]
 seo_title: "machyon ui: a local app for bulk image downloads · Machyon"
 description: "machyon ui runs Machyon as a local app in your browser: paste links or upload a CSV, watch real progress, retry failures, and choose where runs are saved."
 ---

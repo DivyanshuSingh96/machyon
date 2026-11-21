@@ -1,4 +1,5 @@
 ---
+tags: [Beginner, CLI, Python API]
 seo_title: "Quickstart: download images from a list of URLs · Machyon"
 description: Download a list of image URLs with one line of Python or one command, see what happened, and resume.
 ---

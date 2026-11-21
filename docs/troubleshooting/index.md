@@ -1,4 +1,5 @@
 ---
+tags: ["Errors & retries"]
 description: "Fix common download problems: 403s and HTML pages instead of images, certificate errors, timeouts, rate limits, proxies and Windows file locks."
 ---
 

@@ -1,4 +1,5 @@
 ---
+tags: [Beginner, machyon ui, CLI, Python API]
 description: Pick download() for scripts, adownload() or Downloader in async code, the CLI in a terminal, machyon ui in your browser, or Colab with no install.
 ---
 
