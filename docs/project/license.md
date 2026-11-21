@@ -25,7 +25,7 @@ repository"), Zenodo and most reference managers.
 @software{singh_machyon_2026,
   author  = {Singh, Divyanshu},
   title   = {Machyon: fast, self-tuning bulk image downloads that account for every file},
-  version = {1.2.3.post1},
+  version = {1.2.4},
   year    = {2026},
   url     = {{ "{" }}{{ config.extra.repo }}{{ "}" }},
   license = {MIT}
