@@ -29,7 +29,8 @@ def build(ev, tmp_path):
         pytest.skip("jq isn't installed (GitHub's runners have it)")
     path = tmp_path / "event.json"
     path.write_text(json.dumps(ev), encoding="utf-8")
-    out = subprocess.run(["jq", "-f", str(JQ), str(path)], capture_output=True, text=True, check=True).stdout
+    # jq writes UTF-8 everywhere; without encoding=, Windows would decode it with its code page and miscount "…".
+    out = subprocess.run(["jq", "-f", str(JQ), str(path)], capture_output=True, encoding="utf-8", check=True).stdout
     return json.loads(out)
 
 
