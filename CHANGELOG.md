@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-21: Release notes on Discord
+
+**Added**
+
+- Publishing a release now posts its title and notes to #announcements in the Machyon Community, with the pip
+  command and links to PyPI, the docs and the changelog. Discord's own GitHub integration only posts a one-line
+  "New release published" link. The new workflow (`discord-release.yml`) is separate from the PyPI one, so a
+  Discord problem can't hold up a release, and it skips pre-releases. It needs a `DISCORD_RELEASE_WEBHOOK` secret
+  and does nothing without it.
+
 ## 2026-11-21: Search filters
 
 **Fixed**
