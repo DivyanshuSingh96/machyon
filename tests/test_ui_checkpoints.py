@@ -112,10 +112,11 @@ def test_a_failed_write_is_reported_until_one_succeeds(caplog):
     disk.fail = OSError(28, "No space left on device")
     w = checkpoints(disk, 1)
     deadline = time.monotonic() + TIMEOUT
-    while not w.failures and time.monotonic() < deadline:
+    # The writer counts the failure under its lock and logs after releasing it, so wait for the warning itself.
+    while "Could not save a progress checkpoint" not in caplog.text and time.monotonic() < deadline:
         time.sleep(0.005)
     assert w.error == "OSError: [Errno 28] No space left on device" and w.written == 0 and w.saved_at is None
-    assert "Could not save a progress checkpoint" in caplog.text
+    assert w.failures == 1 and "Could not save a progress checkpoint" in caplog.text
     disk.fail = None
     w.submit(2, {"id": "r", "gen": 2})
     while w.written != 2 and time.monotonic() < deadline:

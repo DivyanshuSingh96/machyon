@@ -593,6 +593,75 @@ def test_a_second_ctrl_c_quits_at_once_and_the_run_can_be_resumed(tmp_path, cdn)
     assert store.recover() == [rid] and store.load(rid)["status"] == "interrupted"   # ...until the next launch
 
 
+# The operating system may hand Ctrl+C to any thread (macOS often picks the download thread). These send it to a
+# chosen thread with pthread_kill, inside the child, once the test creates the file `go`.
+ON_ANOTHER_THREAD = (
+    "import os, signal, sys, threading, time\n"
+    "def _send(go, name):\n"
+    "    while not os.path.exists(go): time.sleep(0.02)\n"
+    "    t = next((t for t in threading.enumerate() if t.name == name), threading.current_thread())\n"
+    "    os.remove(go)\n"
+    "    signal.pthread_kill(t.ident, signal.SIGINT)\n"
+    "    if t is threading.current_thread(): time.sleep(3600)\n"
+    "threading.Thread(target=_send, args=({go!r}, {name!r}), daemon=True, name='test-sender').start()\n"
+)
+
+
+def free_port():
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+@pytest.mark.skipif(not hasattr(signal, "pthread_kill"), reason="needs POSIX threads to aim the signal")
+def test_ctrl_c_on_another_thread_stops_an_idle_ui_at_once(tmp_path):
+    port, go = free_port(), tmp_path / "go"
+    code = (ON_ANOTHER_THREAD.format(go=str(go), name="test-sender")
+            + f"import machyon.cli; machyon.cli.main(['ui', '--no-browser', '--output-dir', {str(tmp_path / 'runs')!r}, "
+              f"'--port', '{port}'])")
+    p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        read_until(p, "Press Ctrl+C")
+        go.write_text("")
+        started = time.monotonic()
+        rest = p.communicate(timeout=TIMEOUT)[0]
+        # Before the fix the loop never woke up: the server kept running until something else reached it.
+        assert p.returncode == 0 and "Machyon UI stopped." in rest and time.monotonic() - started < 5
+    finally:
+        if p.poll() is None:
+            p.kill()
+            p.wait()
+
+
+@pytest.mark.skipif(not hasattr(signal, "pthread_kill"), reason="needs POSIX threads to aim the signal")
+def test_a_second_ctrl_c_on_the_download_thread_quits_at_once(tmp_path, cdn):
+    c = cdn("--rtt", "0.3")
+    port, go = free_port(), tmp_path / "go"
+    code = (ON_ANOTHER_THREAD.format(go=str(go), name="machyon-ui-download")
+            + "import machyon.ui.worker as w; w.Worker._finish = lambda self, *a, **k: threading.Event().wait()\n"
+            + f"import machyon.cli; machyon.cli.main(['ui', '--no-browser', '--output-dir', {str(tmp_path / 'runs')!r}, "
+              f"'--port', '{port}'])")
+    p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        out = read_until(p, "Press Ctrl+C")
+        cl = Remote(port, out.split("#token=")[1].split()[0])
+        cl.post("/api/runs", body(staged(cl, c, 60)))
+        downloading(cl)
+        p.send_signal(signal.SIGINT)
+        read_until(p, "Stopping the download")
+        go.write_text("")
+        started = time.monotonic()
+        rest = p.communicate(timeout=TIMEOUT)[0]
+        # Before the fix this waited for the next "still waiting" notice, up to WAIT_NOTICE_S (10 s).
+        assert p.returncode == 130 and "Quitting now" in rest and time.monotonic() - started < 5
+    finally:
+        if p.poll() is None:
+            p.kill()
+            p.wait()
+
+
 # ------------------------------------------------------------------ recovery
 
 def test_recovery_removes_unfinished_metadata_writes_and_keeps_finished_runs(ui, cdn):
