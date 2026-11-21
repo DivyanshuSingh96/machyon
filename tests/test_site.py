@@ -488,7 +488,8 @@ def test_header_links_and_version_on_every_page(site, headers):
             else:
                 assert a["href"] == social["link"] and a.get("rel") == "noopener" and a.get("target") == "_blank", rel
         page = site["url"] + rel.removesuffix("index.html")
-        assert h.version_text == f"v{version}", rel
+        assert h.version_text == f"v{version.split('.post')[0]}", rel     # a post-release shows its release
+        assert h.version["title"] == f"Machyon {version}: what's new", rel
         assert urljoin(page, h.version["href"]) == site["url"] + "project/changelog/", rel
         assert not h.source_widget, rel     # no page asks GitHub's API for stars from the visitor's browser
 

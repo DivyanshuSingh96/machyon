@@ -30,8 +30,9 @@
       </a>
       <span class="mx-topbar__docs" aria-hidden="true" data-mx-item="docs">Docs</span>
       {%- if config.extra.version %}
+      {#- A post-release (1.2.3.post1) has the same code as its release, so the chip shows 1.2.3 and keeps its width. -#}
       <a class="mx-topbar__version" href="{{ 'project/changelog/' | url }}" data-mx-item="version"
-         title="Machyon {{ config.extra.version }}: what's new">v{{ config.extra.version }}</a>
+         title="Machyon {{ config.extra.version }}: what's new">v{{ (config.extra.version | split('.post'))[0] }}</a>
       {%- endif %}
       {#- Kept for the theme's script, which swaps in the page title on scroll; not shown. -#}
       <div class="md-header__title" data-md-component="header-title" hidden>
