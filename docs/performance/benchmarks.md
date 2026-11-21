@@ -12,7 +12,7 @@ and whether each file that should exist does, byte for byte.</p>
 
 ## Results
 
-Measured on 2026-11-10 with Machyon 1.1.0 and img2dataset 1.47.0. Each figure is the median of three runs; the
+Measured on 2026-11-21 with Machyon 1.2.3 and img2dataset 1.47.0. Each figure is the median of three runs; the
 results file keeps all three.
 
 {{ benchmark_table() }}
@@ -28,17 +28,18 @@ No tool produced a **corrupt** file (right name, wrong bytes) in any scenario, s
 
 ## What the numbers say
 
-- **Real-world faults.** Machyon was about twice as fast, missed nothing and saved no bogus files. With its
-  defaults, img2dataset lost 99 images to transient errors; `retries=3` recovered them. Both img2dataset
+- **Real-world faults.** Machyon was more than twice as fast, missed nothing and saved no bogus files. With its
+  defaults, img2dataset lost 98 images to transient errors; `retries=3` recovered them. Both img2dataset
   configurations kept the 10 HTML "soft 404" pages as image files.
 - **Rate-limited CDN.** At its defaults, img2dataset sent 256 requests at once into a CDN that allows 48, and lost
-  2,995 of 3,000 images to 429s. Machyon found the limit on its own. img2dataset can get all 3,000 too, once
-  hand-tuned to 24 requests in flight, at 224 img/s.
+  2,992 of 3,000 images to 429s. Machyon found the limit on its own. img2dataset can get all 3,000 too, once
+  hand-tuned to 24 requests in flight, at 231 img/s.
 - **Honouring `Retry-After` costs a little speed.** Since 1.0.2, Machyon sends nothing new to a host until its
-  `Retry-After` wait is over. Against this CDN it received 33 429s, where 1.0.0 received 264, and finished at
-  301 img/s instead of 343: about 12% slower, with eight times fewer requests refused.
+  `Retry-After` wait is over. Against this CDN it received 41 429s, where 1.0.0 received 264, and finished at
+  300 img/s instead of 343: about 13% slower, with six times fewer requests refused.
 - **Slow link and high latency.** When the network is the bottleneck, the tools converge. Machyon was ahead on the
-  slow link (114 against 98 img/s) and slightly ahead at 350 ms latency (243 against 232).
+  slow link (114 against 99 img/s). At 350 ms latency the two were level: Machyon 237 img/s, img2dataset 234 at
+  its defaults and 239 with `retries=3`, all within the spread between runs.
 
 ## Method
 
@@ -82,7 +83,7 @@ I2D_PYTHON=.venv-i2d/bin/python python benchmarks/harness.py --impl i2d --scenar
     --n 5000 --server="--real-jpeg --pregen 5000" --client="0 256 2"
 ```
 
-Each run prints one JSON line in the same format as `benchmarks/results-2026-11-10.jsonl`, the file this page is
+Each run prints one JSON line in the same format as `benchmarks/results-2026-11-21.jsonl`, the file this page is
 generated from.
 
 ## Where img2dataset is the better choice

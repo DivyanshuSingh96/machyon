@@ -1,10 +1,10 @@
 """Benchmark chart for the README (light + dark SVG), in the docs palette (Sky on Honey paper / Aurora on brand slate) with Machyon in the
-logo's slate. Data: benchmarks/results-2026-11-10.jsonl (byte-verified runs)."""
+logo's slate. Data: benchmarks/results-2026-11-21.jsonl (byte-verified runs)."""
 import json
 import os
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-RESULTS = os.path.join(OUT, "..", "benchmarks", "results-2026-11-10.jsonl")
+RESULTS = os.path.join(OUT, "..", "benchmarks", "results-2026-11-21.jsonl")
 rows = [json.loads(line) for line in open(RESULTS) if line.strip().startswith("{")]
 get = {(r["variant"], r["scenario"]): r for r in rows}
 
@@ -38,7 +38,7 @@ def chart(t):
          f'<text x="24" y="62" font-size="13" fill="{t["ink2"]}">Higher is better. Same fault-injecting CDN, same machine (2 vCPU), default settings for both tools.</text>']
     # legend
     lx = 24
-    for color, label in ((t["a"], "Machyon 1.1"), (t["b"], "img2dataset 1.47 (defaults)")):
+    for color, label in ((t["a"], "Machyon 1.2.3"), (t["b"], "img2dataset 1.47 (defaults)")):
         s.append(f'<rect x="{lx}" y="76" width="12" height="12" rx="3" fill="{color}"/>')
         s.append(f'<text x="{lx + 18}" y="86.5" font-size="13" fill="{t["ink2"]}">{label}</text>')
         lx += 18 + len(label) * 7.2 + 24

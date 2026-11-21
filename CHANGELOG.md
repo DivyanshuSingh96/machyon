@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.3.post1 (2026-11-21)
+
+The same code as 1.2.3, released again so the project page on PyPI shows the current README. A PyPI release's
+description can't be changed after it is uploaded.
+
+**Changed**
+
+- The benchmarks were run again with Machyon 1.2.3 and img2dataset 1.47.0, on the same scenarios and machine as
+  before. The README table, its charts and the benchmarks page now show these runs, and
+  `benchmarks/results-2026-11-21.jsonl` keeps all three runs of each. Machyon is faster on the real-world faults
+  scenario (586 img/s, up from 524) and otherwise much where it was. At 350 ms latency the two tools are now level,
+  and the README says so instead of showing Machyon ahead.
+- The README links to the Machyon Community on Discord.
+- The version in the documentation header shows the release a post-release belongs to (v1.2.3 for 1.2.3.post1),
+  so the header keeps its width; the full version is in its tooltip and on the homepage's structured data.
+- The licence page no longer says the site calls GitHub's API for the header; it hasn't since the new header.
+
 ## 2026-11-21: Machyon Community on Discord
 
 **Changed**
